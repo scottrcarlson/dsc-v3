@@ -1,0 +1,12 @@
+Place to hold random notes regarding system configuration. with the idea of automating the installation from a vanilla debian based OS with systemd :O
+
+# RTC / HW CLOCK 
+----------
+fake-hwclock was interferring with our rtc+hwclock! Removed from this image. sudo apt-get -y remove fake-hwclock && udo update-rc.d -f fake-hwclock remove
+
+also for systemd: 
+sudo nano /lib/udev/hwclock-set and comment out these three lines:
+#if [ -e /run/systemd/system ] ; then
+# exit 0
+#fi
+----------

@@ -1,0 +1,64 @@
+# Wiring Documentation for DSC v2
+
+Raspberry Pi Zero
+*Board Pin Numbers Used
+-------------------------------------
+PIN 7  (I)  --> Radio IRQ
+PIN 40 (O)  --> Radio Reset
+PIN 11 (O)  --> OLED Reset
+PIN 33 (I)  --> Key Up
+PIN 37 (I)  --> Key Down
+PIN 29 (I)  --> Key Left
+PIN 38 (I)  --> Key Right
+PIN 36 (I)  --> Key Enter
+PIN 35 (I)  --> Key Back
+PIN 8  (TX) --> Radio RX)
+PIN 10 (RX) --> Radio TX)
+PIN 3  (I2C SDA) --> SDA (OLED / RTC)
+PIN 5  (I2C SCL) --> SCL (OLED / RTC)
+PIN 1, 17 --> 3v3 (Used to Power Radio, OLED, Keypad and RTC)
+PIN GND   --> Ground all Components
+--------------------------------------
+
+Keypad (IO Board) (J1)
+---------------
+PIN 1 (Key Up)    --> (Pi Zero PIN 33)
+PIN 2 (Key Right) --> (Pi Zero PIN 38)
+PIN 3 (Key Enter) --> (Pi Zero PIN 36)
+PIN 4 (Key Down)  --> (Pi Zero PIN 37)
+PIN 5 (Key Back)  --> (Pi Zero PIN 35)
+PIN 6 (Key Left)  --> (Pi Zero PIN 29)
+PIN 7 (GND)       --> (Pi Zero GND)
+PIN 8 (3V3)       --> (Pi Zero 3V3)
+---------------
+
+OLED
+--------------
+SDA --> (Pi Zero PIN 3)
+SCL --> (Pi Zero PIN 5)
+3v3 --> (Pi Zero 3v3)
+GND --> (Pi Zero GND)
+RST --> (Pi Zero PIN 
+--------------
+
+RTC
+---------------
+SDA --> (Pi Zero PIN 3)
+SCL --> (Pi Zero PIN 5)
+3v3 --> (Pi Zero 3v3)
+GND --> (Pi Zero GND)
+---------------
+
+RADIO
+---------------
+PIN 5  (3v3)   --> (Pi Zero 3v3)
+PIN 25 (GND)   --> (Pi Zero GND)
+PIN 23 (RX)    --> (Pi Zero PIN 8)
+PIN 24 (TX)    --> (Pi Zero PIN 10)
+PIN 7  (Reset) --> (Pi Zero PIN 40)  
+---------------
+
+
+# Reference: Raspberry Pi Zero and LL-RXR-27 radio 
+Pinout Diagrams: https://docs.google.com/document/d/1CCm--WU$
+

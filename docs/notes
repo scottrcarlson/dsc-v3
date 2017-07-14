@@ -1,0 +1,28 @@
+Change Logs
+
+
+-------[Scott Carlson 2016-07-26]---------
+Removed tabs from crypto.py
+Integration keyset generation / random keyset password and yubikey slot setting
+Optimized radio tx msg sending freq. (reduced tx_throttle). We don't need to put the radio into
+rx mode when tdma slot is active!
+Removed sys.exit from crypto.gen_keysets. Return true/false instead
+Decrease yubikey thread sleep to consistently capture the 38byte keyset password
+
+Refactoring UI and DISPLAY thread. The display thread will simply be in charge of drawing content provided by UI to the oled.
+Populating UI/Menu's and Dialogs.
+
+Keyset/password generation Process via UI almost complete.
+1. Check for existing keysets (If so, then bail, force user to factory reset before generating new keys)
+2. Generate 38byte password
+3. Generate enc/dec sig/validate keys and encrypt private keys with password
+4. set password to slot1 of yubikey
+5. (NOT DONE). Validate yubikey can unlock keyset (if not, bail, wipe keys, force user to retry)
+
+Keyset Password length = 38bytes (max size for yubikey static password in a slot)
+
+Off by one in crypto.generate_random_password(length), fixed.
+
+Working out mechanisms for managing the transfer of public keys (using a usb drive).
+
+TODO: Optimize yubikey thread, it consumes 15% cpu load when plugged in. 

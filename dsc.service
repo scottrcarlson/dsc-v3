@@ -1,0 +1,10 @@
+[Unit]
+Description=Dirt Simple Comms Service
+After=sysinit.target
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python /home/dsc/dsc2/dsc2.py
+
+[Install]
+WantedBy=sysinit.target

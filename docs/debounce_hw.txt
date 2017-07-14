@@ -1,0 +1,7 @@
+Debounce PCB Populated with the following:
+R1 = 18Kohm
+R2 = 1.2Kohm
+C = 1 uF
+Cdecoupler = 0.1uF
+74HC14 - Hex Inverter (w/ Schmitt Triggers)
+

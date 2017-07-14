@@ -1,0 +1,234 @@
+Dirt Simple Comms v2 (DSCv2) Messaging Device Description
+
+
+[Table of Contents]
+-------------------
+ *- Goals
+ *- Basic Description of Operation
+ *- Facts
+ *- Key Generation, Management and Exchange
+ *- Authentication / Data Storage 
+ *- Protocol Description: Messages
+ *- Protocol Description: Beacons
+ *- Future Work
+
+
+
+
+
+
+[Goals]
+----------------
+ 1. To not require existing infrastructure
+ 2. To operate well and propage messages in poor rf environments.
+ 3. To securely exchange messages with friends in hostile rf environments. 
+ 4. To avoid central points of control in the system design.
+ 5. To keep the attack surface as small as possible.
+ 6. Make it easy to use and hard to mess up.
+ 7. To leak as little data as possible.
+ 8. Low Cost / Low Power / Long Range
+ 9. Small Form Factor / Portable
+ 10. Utilize LoRA Modulated 900mhz Radio System
+
+
+
+
+
+
+[Basic Description of Operation]
+--------------------------------
+A group of friends meet on location (camping, festivals, conferences, etc). Each person
+produces their dscv2 module and generates two pairs of keys (encryption / signature keys) 
+and exchanges their public keys physically (currently via USB).
+
+The network is manually configured for fixed/static TDMA operation.
+
+Now friends can freely exchange messages with each other. Every node acts as a repeater.
+Every message gets repeated by all nodes. It is a blind broadcast. There is no routing
+information or packet headers. All data is encrypted and then signed before transmission.
+The idea is for all msgs to eventually get to where they are destined without sharing
+too much meta data. 
+
+If Alice wants to send a msg to Bob and they are not currently within range, other nodes 
+that are may then receive the message, verify its signature and then begin repeating, 
+eventually Bob receives his message.
+
+All nodes will periodically broadcast a beacon, which is comprised of a cleartext hash that
+is signed. 
+
+Beacons Provide:
+1. Signature
+2. Repeat List Hash (Additional state info (EMPTY/QUIET)
+3. Stats (Last seen, RSSI and SNR) <-- Indirectly
+
+As the messages begin to pile up in each of the nodes repeat buffers, you can imagine the
+network becomes more lethargic. To mitigate this an additional piece of information is
+sent with the beacon. A hash of all msgs in the repeat buffer.
+
+Each node tracks the last received beacon hash of its neighbors. If the hash is equal to
+the current node, then a confidence counter is incremented. If all neighbors have a high level
+of confidence (that everybody has everything), then the node will transition into a /quiet mode/.
+
+Quiet mode prevents any further transmission of messages. It also increases the frequency of
+beacon broadcasts. When in quiet mode, a special hash(quiet hash) is used. If a neighboring node
+receives this quiet hash it will force that node into quiet mode as well. Quiet mode should 
+propogate to all nodes. When all nodes exist the quiet mode period (typically 2 TDMA cycles),
+the network is reset with empty repeat buffers.
+
+Rinse, Repeat and Msg.
+
+This system may shine at locations where there is no cellular service, or hostile actors 
+running rampant over the rf spectrum.
+
+
+
+
+
+[Facts]
+--------------
+1. A node can only know for certain that a msg is/or is NOT for them. Not whom it is destined.
+2. A node can know the origination of a message (based on its signature)
+3. A node can NOT know if a specific msg has arrived at its destination.
+4. A node can know if EVERYONE has EVERYTHING. (Hence knowing a message has arrived at its dest)
+5. A node will drop any packet that is not signed by its peers.
+
+
+
+
+
+
+[Key Generation, Management and Exchange]
+-----------------------------------------
+ Key Generation Process Consists:
+     1. Create Keychains
+     2. Generating Pub/Priv Encyption Keys
+     3. Generating Pub/Priv Signature Keys
+     4. Encrypt each keychain with a randomly generated passphrase
+     5. Store passphrases on yubikey/usb drive.
+     ** Plans to move to U2F dongles, no static passwords!!
+
+The public keys are then copied to every node on the network. Currently a valid signature
+is required for a node to repeat a message. In this case we need to exchange 2*(n-1) keys 
+to function properly. There is also a weakness as the origination of a msg is known to all. 
+(But not the destination!) 
+
+The keys are currently transferred on physical medium (usb drive), but should ultimately
+be able to exchange over the air. 
+
+
+
+
+
+
+[Authentication / Data Storage]
+-------------------------------
+All data is encrypted on disk. Cleartext only resides in memory. To authenticate
+is to unencrypt the node's keychain. This happens by plugging in the yubikey device and long
+pressing the button (which feeds a passphrase). If the correct yubikey is inserted, 
+the keychain unlocks, and the current message threads are decrypted and ready for viewing. 
+Once the key is removed, the screen locks, and memory is wiped. The system is now at rest. 
+It is unable to decrypt or sign msgs. If physically stolen, no message data is available.
+
+
+
+
+
+
+[Protocol Description]
+------------------------------
+Fixed TDMA stategy is used. Each node needs to be manually configured ahead of time.
+The following settings are configurable:
+    1. TDMA Slot Number
+    2. Total Number of Nodes
+    3. TX Time
+    4. Deadband Time
+Where the TDMA Slot Width = TX Time + Deadband Time
+
+** Messages
+----------
+The cleartext max size is 150bytes (<-- what is the actual number)
+
+Encypting and then signing the cleartext yields:
+
+   cypher    signature
+|[261 bytes][261 bytes]|
+
+    * 255 bytes due to pkcs11 padding and 2048 bit key
+    * 6 bytes are overhead from Keyczar library implementation. (***add details)
+
+The total data packet size 522 bytes exceeds max rf packet size of 255 bytes. 
+
+We must split the packet into 3 segments, and send them OTA individually:
+
+   cipher    signature           Seg1          Seg2          Seg3
+|[261 bytes][261 bytes]| --> |[255 bytes]| |[255 bytes]| |[12 bytes]|
+
+The last 6 bytes of the cipher block get shifted into the beginning of the signature
+block, the last 12 bytes of the signature block shifts into the third segment.
+
+To help the packets get reassembled properly on the other end, the first 100 bytes 
+are copied from Seg1 and Seg2 and appended to the third segment. The third segment will 
+be called the fingerprint. (**is there a standard term for this)
+
+    Seg1          Seg2       Fingerprint
+|[255 bytes]| |[255 bytes]| |[212 bytes]|
+
+Upon receiving each segment, the node will accumulate them into a temporary 
+buffer that gets cleared periodically (to mitigate spam and orphan segments).
+To reassemble we look for segments that are 212 bytes, and then use the two 100byte 
+segments to search for the remaining subpackets in the buffer.
+Once found and reassembled it removes the segments from the buffer and 
+attempts to verify the signature of the complete packet.
+
+Once the packet signature has been verfied, it is then added to the repeat buffer 
+to be retransmitted to other nodes. If the node is /unlocked/ it will then attempt to
+decrypt the packet. Upon success it is then further processed for viewing/storage.
+
+Duplicate Segments and Messages are Dropped. Unsigned Packets get Dropped.
+
+** BEACONS
+----------
+Beacon messages will play a large role in the health of the network. By exchanging state
+information, each node can determine when all neighbors have all information. A beacon
+is sent at the beginning of a nodes TDMA window.
+
+Beacon Message:
+
+
+   hash     signature
+|[32 bytes][261 bytes]|
+
+The repeat buffer of each node is hashed before transmitting the beacon. 
+
+
+Each node tracks the state of its neighbors. When their hashes match a confidence counter
+increments. Once any single node has a high confidence count on every node, a consensus
+is made. (First to discover, Everyone has everything). The consensus triggers /Quiet/
+mode. 
+
+/Quiet/ mode prevents transmission of messages for a period of time. During this period of
+time it sends a beacon continuously within its tdma slot.
+The beacon contains a /Quiet/ hash, telling the other
+nodes that it has decided that everyone has everything and therefore force peer nodes that 
+receive this packet to also go into quiet mode. This mode propogates throughout the network,
+and at the end of quiet mode the repeat list is cleared, and the system starts fresh.
+** Note current issues. Race conditions....
+
+
+[Future Work]
+-------------
+1. How to mitigate the damage a compromised node can do to a network.
+	(spam/garbage with proper signature, breaking tdma transmit ediquite)
+2. Rethink Keys / Key Exchange / Crypto. Try to make it simpler to use and to allow
+	more features, such as forward secrecy, future secrecy, key exchange OTA,
+	symettric network session keys to allow for sending one to many without sending n-1
+	individually encrypted msgs.
+3. Encrypt/Sign Beacons (Currently the beacon is cleartext + sig)
+4. Dynamic TDMA (Adding/Removing Nodes, optimizing slot cycles based on presence)
+5. Explore physical device hardening. (Tamper evident, Self Destruct, Proper Memory Handling,
+	Trusted Computing)
+6. External IC for RNG
+7. Smaller formfactor / better UX
+8. Replace static storage of keychain passphrase with decentralized U2F hardware key.
+
+
