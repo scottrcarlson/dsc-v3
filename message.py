@@ -124,7 +124,7 @@ class Message(Thread):
 
         author = 'RUSSET01'
         spare = "    " # 4 bytes
-        group_cleartext = '12345678DSC3'+spare+msg
+        group_cleartext = 'AAAAAAAADSC3'+spare+msg
         self.log.debug("Spare size: [" + str(len(spare)) + "]")
         self.log.debug("author size: " + str(len(author)))
         self.log.debug("***encrypt GROUP ***************************")
@@ -172,6 +172,7 @@ class Message(Thread):
 
         network_plaintext = self.crypto.decrypt(self.network_key, str(msg))
         self.log.debug("group cipher:" + binascii.hexlify(network_plaintext))
+
         network_plaintext = network_plaintext[4:]
 
         if 'DSC3' in network_plaintext:
