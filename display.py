@@ -17,7 +17,7 @@ import logging
 m_IDLE = 0
 m_LOCK = 1
 m_AUTH = 2
-m_RECIPIENT_MENU = 3
+m_SPARE3 = 3
 m_COMPOSE_MENU = 4
 m_COMPOSE = 5
 m_MAIN_MENU = 6
@@ -56,7 +56,7 @@ class Display(Thread):
         self.viz_min = 0
         self.viz_max = self.screen_row_size
 
-        self.view_msg_friend = None
+
 
         self.message = message
 
@@ -113,14 +113,14 @@ class Display(Thread):
                     draw.text((0, 30), current_datetime, font=self.font, fill=255)
                     #draw.text((0, 52), self.version, font=self.font, fill=255)
 
-                    if self.message.stats_max_repeat_size != 0:
-                        progress_bar = (len(self.message.repeat_msg_list) / float(self.message.stats_max_repeat_size)) * 127
-                    else:
-                        progress_bar = 0
+                    #if self.message.stats_max_repeat_size != 0:
+                    #    progress_bar = (len(self.message.repeat_msg_list) / float(self.message.stats_max_repeat_size)) * 127
+                    #else:
+                    progress_bar = 0
 
                     draw.rectangle((0, 42, 127, 49), outline=255, fill=0)
                     draw.rectangle((0, 42, int(progress_bar), 49), fill=255)
-                    draw.text((0, 52), '%d/%d'%(len(self.message.repeat_msg_list),self.message.stats_max_repeat_size), font=self.font, fill=255)
+                    #draw.text((0, 52), '%d/%d'%(len(self.message.repeat_msg_list),self.message.stats_max_repeat_size), font=self.font, fill=255)
 
                     radio_mode = ''
                     if self.message.is_radio_tx:
@@ -128,13 +128,12 @@ class Display(Thread):
                     else:
                         radio_mode = 'RX'
 
-                    if self.message.quiet_mode:
-                        draw.text((35, 52), ' [' + radio_mode + '] net quiet', font=self.font, fill=255)
-                    elif self.message.network_equal:
-                        draw.text((35, 52), '    [' + radio_mode + '] net eq', font=self.font, fill=255)
-                    else:
-                        draw.text((35, 52), '[' + radio_mode + '] net not eq', font=self.font, fill=255)
-
+                    #if self.message.quiet_mode:
+                    #    draw.text((35, 52), ' [' + radio_mode + '] net quiet', font=self.font, fill=255)
+                    #elif self.message.network_equal:
+                    #    draw.text((35, 52), '    [' + radio_mode + '] net eq', font=self.font, fill=255)
+                    #else:
+                    #    draw.text((35, 52), '[' + radio_mode + '] net not eq', font=self.font, fill=255)
                     #draw.text((0, 55), '[0] msgs unread', font=self.font, fill=255)
             #------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS_LASTSEEN:
@@ -184,26 +183,6 @@ class Display(Thread):
                         draw.text((30, 40), '<NO>     YES ', font=self.font, fill=255)
                     elif self.col_index == 1:
                         draw.text((30, 40), ' NO     <YES> ', font=self.font, fill=255)
-           #------[MSG RECIPIENT MENU]-------
-            elif self.mode == m_RECIPIENT_MENU:
-                with canvas(self.device) as draw:
-                    draw.line((121,3,124,0), fill=255)
-                    draw.line((124,0,127,3), fill=255)
-                    if (self.row_index < self.viz_min):
-                        self.viz_max -= self.viz_min - self.row_index
-                        self.viz_min = self.row_index
-                    if (self.row_index >= self.viz_max):
-                        self.viz_max = self.row_index + 1
-                        self.viz_min = self.viz_max - self.screen_row_size
-                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    #for i in range(self.viz_min,self.viz_max):
-
-                    for i in range(0,len(self.message.friends)):
-                        draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), self.message.friends[i], font=self.font, fill=255)
-                    draw.line((121,60,124,63), fill=255)
-                    draw.line((124,63,127,60), fill=255)
-
-                    draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
 
            #------[MSG COMPOSE MENU]-------
             elif self.mode == m_COMPOSE_MENU:
@@ -265,16 +244,13 @@ class Display(Thread):
                         self.viz_max = self.row_index + 1
                         self.viz_min = self.viz_max - self.screen_row_size
                     #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    if self.view_msg_friend in self.message.cleartext_msg_thread:
-                        if self.message.cleartext_msg_thread[self.view_msg_friend] != None:
-                            if len(self.message.cleartext_msg_thread[self.view_msg_friend]) < self.viz_max:
-                                max = len(self.message.cleartext_msg_thread[self.view_msg_friend])
-                            else:
-                                max = self.viz_max
-                            #print "viz min:",self.viz_min
-                            #print "viz max:",max
-                            for i in range(self.viz_min,max):
-                                draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), self.message.cleartext_msg_thread[self.view_msg_friend][i], font=self.font, fill=255)
+
+                    if len(self.message.cleartext_msg_thread) < self.viz_max:
+                        max = len(self.message.cleartext_msg_thread)
+                    else:
+                        max = self.viz_max
+                    for i in range(self.viz_min,max):
+                        draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), self.message.cleartext_msg_thread[i], font=self.font, fill=255)
                     else:
                         draw.text((0, 0),"No Messages", font=self.font, fill=255)
 

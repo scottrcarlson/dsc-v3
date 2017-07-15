@@ -37,8 +37,14 @@ class Message(Thread):
         self.log = logging.getLogger(self.__class__.__name__)
         #self.log.setLevel(logging.DEBUG)
 
-        self.cleartext_msg_thread = {}
-        self.msg_thread = {}
+        self.alias = "midget01"
+        self.group_key="eatme12345678900"
+        self.network_key="eatme12345678901"
+
+        self.network_plaintexts = []
+        self.group_cleartexts = []
+
+        self.config = config
         self.repeat_msg_list = []
 
         self.repeat_msg_index = 0
@@ -54,114 +60,58 @@ class Message(Thread):
 
         self.is_radio_tx = False
 
-        self.prev_msg_thread_size = {}
         self.log.info("Initialized Message Thread.")
 
     def run(self):
         tmda_frame_size = (self.config.tdma_total_slots * (self.config.tx_time + self.config.tx_deadband))
-        #beacon_interval = tmda_frame_size
-        #beacon_timeout = time.time()
-
-        #self.build_friend_list();
-        #seg_life_cnt = 0
-        latchCheck = True
 
         self.event.wait(1)
+        tick_ttl_reaper = 60 / 0.05
+        cnt_ttl_reaper = 0
         while not self.event.is_set():
             try:
-                msg = self.radio_inbound_queue.get_nowait()
+                packet = self.radio_inbound_queue.get_nowait()
             except Queue.Empty:
-                if not latchCheck:
-                    latchCheck = True
-                    self.check_for_complete_msgs()
+                pass
             else:
-                #print "Inbound Packet Processed."
-                latchCheck = False
-                self.add_msg_to_repeat_list(msg)
-            timestamp = time.time()
+                self.log.debug("Processing inbound packet.")
+                #$packet_segs = packet.split('|')
+                #msg = packet_segs[0]
+                #rssi = packet_segs[1]
+                #snr = packet_segs[2]
+                self.log.debug("*****pulled this from radio_inbound_queue: " + binascii.hexlify(packet))
+                #self.log.debug("rssi:" + rssi)
+                #self.log.debug("snr:" + snr)
+                self.process_packet(packet,'','')
+            #timestamp = time.time()
             self.fill_outbound_queue()
+
+            #Queue Reaper
+
+            if cnt_ttl_reaper > tick_ttl_reaper:
+                cnt_ttl_reaper = 0
+                for network_plaintext in self.network_plaintexts:
+                    packet_sent_time = struct.unpack(">I",network_plaintext[:4])
+                    packet_ttl = struct.unpack(">I",network_plaintext[4:8])
+                    if time.time() > packet_sent_time + packet_ttl:
+                        self.log.info("Reaper gonna reap")
+                        self.network_plaintexts.remove(network_plaintext)
+            else:
+                cnt_ttl_reaper += 1
+
             self.event.wait(0.05)
 
     def stop(self):
         self.log.info( "Stopping Message Thread.")
         self.event.set()
 
-    def get_msg_thread(self,friend):
-        #look up by alias to return the associate msg thread
-        if friend in self.cleartext_msg_thread:
-            return self.cleartext_msg_thread[friend]
-        else:
-            return None
-
-    def decrypt_msg_thread(self, friend):
-        #pass friends alias, and decrypt thread make available for viewing
-        pass
-"""
-        if friend in self.msg_thread:
-
-            if friend not in self.cleartext_msg_thread: #Initialize
-                self.cleartext_msg_thread[friend] = []
-            if friend not in self.prev_msg_thread_size: #Initialize
-                self.prev_msg_thread_size[friend] = 0
-
-                self.log.debug( "Decrypting Msg Thread for Viewing.")
-            if len(self.msg_thread[friend]) != self.prev_msg_thread_size[friend]:
-                self.prev_msg_thread_size[friend] = len(self.msg_thread[friend])
-            #self.log.info( "Decrypting thread for viewing pleasure..."
-                tmp_cleartext = []
-                for cypher_msg in self.msg_thread[friend]:
-                    try:
-                        msg_arrived = float(cypher_msg.split('|',1)[0])
-                        cypher_data = cypher_msg.split('|',1)[1]
-                        clear_msg = self.crypto.decrypt_msg(cypher_data, self.config.alias)
-                        clear_msg_segs = clear_msg.split('|')
-                        msg_timestamp = time.mktime(time.strptime(clear_msg_segs[0], "%Y-%m-%d %H:%M:%S"))
-                        tmp_cleartext.append(friend + " " + str(round(msg_arrived - msg_timestamp,0)) + "s")
-                        #tmp_cleartext.append(clear_msg_segs[0]) # Timestamp
-                        clear_text = clear_msg_segs[1]
-                        while len(clear_text) > 20:
-                            tmp_cleartext.append(clear_text[:20]) # Actual Msg
-                            clear_text = clear_text[20:]
-                        tmp_cleartext.append(clear_text)
-                        del(clear_msg_segs) # ???
-                        del(clear_msg) # del from mem, is this good enough. research
-                    except Exception, e:
-                        self.log.error( "Failed to decrypt: ", exc_info=True)
-                self.log.debug( "Rebuilding Msg Thread: Complete.")
-                self.cleartext_msg_thread[friend] = tmp_cleartext
-        else:
-            pass
-            #print "Msg thread is empty:", friend
-"""
 
     def fill_outbound_queue(self):
-        if not self.quiet_mode:
-            if self.radio_outbound_queue.qsize() == 0:
-                for msg in self.repeat_msg_list:
-                    self.radio_outbound_queue.put_nowait(msg)
+        if self.radio_outbound_queue.qsize() == 0:
+            for msg in self.repeat_msg_list:
+                self.radio_outbound_queue.put_nowait(msg)
 
-    def generate_beacon(self):
-        pass
-        """
-        if self.sig_auth: #Need sig_auth to sign beacons
-            self.radio_beacon_queue.queue.clear()
-            if self.quiet_mode:
-                net_cmd = hashlib.md5(self.quiet_cmd).hexdigest()
-                hash_repeat_list = self.last_repeat_hash
-            else:
-                net_cmd = hashlib.md5(self.normal_cmd).hexdigest()
-                hash_repeat_list = hashlib.md5("".join(str(x) for x in sorted(self.repeat_msg_list))).hexdigest()
-            beacon_msg = self.beacon_cmd + '|' + net_cmd + '|' + hash_repeat_list + '|' + str(len(self.repeat_msg_list))
-            beacon_msg += ''.ljust(261 - len(beacon_msg)) #Needs to be 261 bytes total
 
-            s_msg = self.crypto.sign_msg(beacon_msg, self.config.alias)
-            beacon_msg += s_msg
-            self.radio_beacon_queue.put_nowait(beacon_msg[:255])
-            self.radio_beacon_queue.put_nowait(beacon_msg[255:510])
-            seg1f = beacon_msg[:100]
-            seg2f = beacon_msg[255:355]
-            self.radio_beacon_queue.put_nowait(beacon_msg[510:] + seg1f + seg2f)
-"""
     def process_composed_msg(self, msg):
         #DSCv3 Implement Message Encryption here
 
@@ -170,40 +120,39 @@ class Message(Thread):
         #  8 bytes spare
         #  208 bytes for Message
         #  Total 224 bytes group message Cipher
-        timestamp = binascii.hexlify(struct.pack(">I",time.time()))
-        ttl_sp = 120
-        ttl = binascii.hexlify(struct.pack(">I",ttl_sp))
+
+
+        author = 'RUSSET00'
+        spare = "    " # 4 bytes
+        group_cleartext = author+'DSC3'+spare+msg
+        self.log.debug("Spare size: [" + str(len(spare)) + "]")
+        self.log.debug("author size: " + str(len(author)))
+        self.log.debug("***encrypt GROUP ***************************")
+        group_cipher = self.crypto.encrypt(self.group_key,group_cleartext)
+        self.log.debug("group_cleartext: " + group_cleartext)
+        self.log.debug("group_cipher: %s (%d)" % (binascii.hexlify(group_cipher), len(group_cipher)))
+        #self.log.debug("group_cipher: " + group_cipher+ " size: " + str(len(group_cipher)))
 
         # Network Message Packet
-        # 4 bytes for time in epoch
+        # 4 bytes for "sent-at" time in epoch
         # 4 bytes time to live in seconds
         # 8 bytes spare
         # 224 byte group cipher
         # Total 240 bytes OTA mesage cipher
-        #self.repeat_msg_list.append(ota_msg_cipher)
+        timestamp = struct.pack(">I",time.time())
+        ttl_sp = 120 # 2 minutes
+        ttl = binascii.hexlify(struct.pack(">I",ttl_sp))
+        self.log.debug("***encrypt NETWORK *************************** FUCK IT")
+        ota_cipher = self.crypto.encrypt(self.network_key, timestamp+ttl+'DSC3'+'    '+group_cipher)
+        #self.log.debug("ota_cipher: " + group_cipher + " size: " + str(len(ota_cipher)))
+        self.log.debug("*****adding this to repeat_msg_list: %s (%d)" % (binascii.hexlify(ota_cipher), len(ota_cipher)))
+        self.repeat_msg_list.append(ota_cipher)
 
-
-
-        #Need to enforce hard limit for cleartext
-        #19 Bytes for timestamp (can save a few bytes with formatting)
-        #214-19=195 msg size limit
-        #Encrypt / Sign and add to the list
-        #timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        #e_msg = self.crypto.encrypt_msg(timestamp+'|'+msg, friend)
-        #s_msg = self.crypto.sign_msg(e_msg, self.config.alias)
-        #self.repeat_msg_list.append(e_msg + s_msg)
-        #total_msg = e_msg + s_msg
-        #self.stats_max_repeat_size += 1
-        #if len(self.repeat_msg_list) > self.stats_max_repeat_size:
-        #    self.stats_max_repeat_size = len(self.repeat_msg_list)
-
-        return True # TODO Lets capture keyczar error and report back false
+        return True # TODO Lets capture crypto error and report back false
 
     def add_msg_to_repeat_list(self,msg):
         if not self.check_for_dup(msg):
             self.repeat_msg_list.append(msg)
-            if len(self.repeat_msg_list) > self.stats_max_repeat_size:
-                self.stats_max_repeat_size = len(self.repeat_msg_list)
             return True
         else:
             self.log.debug( "Duplicate Message Received via Radio. Dropped")
@@ -217,82 +166,68 @@ class Message(Thread):
                 return True
         return False
 
-    #def check_for_dup_msg_thread(self, msg, friend):
-    #    if friend in self.msg_thread:
-    #        for m in self.msg_thread[friend]:
-    #            self.event.wait(0.1)
-    #            if msg == m:
-    #                return True
-    #    return False
+    def process_packet(self, msg, rf_rssi, rf_snr):
+        self.log.debug("Decrypting Network Message.. ") #RSSI/SNR: " + rf_rssi + "/" + rf_snr)
+        self.log.debug("key:" + self.network_key + " size:" + str(len(self.network_key)))
 
-    def process_msg(self, msg, friend, rf_rssi, rf_snr):
-        if self.beacon_cmd in msg:
-            msg_data = msg.split('|')
-            #cmd_hash = msg[len(self.beacon_cmd):(32 + len(self.beacon_cmd))]
-            #beacon_hash = msg[(len(self.beacon_cmd) + 32):(64 + len(self.beacon_cmd))]
-            cmd_hash = msg_data[1]
-            beacon_hash = msg_data[2]
-            msg_count = int(msg_data[3])
-            if (msg_count > len(self.repeat_msg_list) and msg_count > self.stats_max_repeat_size):
-                self.stats_max_repeat_size = msg_count
-            elif len(self.repeat_msg_list) > self.stats_max_repeat_size:
-                self.stats_max_repeat_size = len(self.repeat_msg_list)
+        network_plaintext = self.crypto.decrypt(self.network_key, str(msg))
+        self.log.debug("group cipher:" + binascii.hexlify(network_plaintext))
+        network_plaintext = network_plaintext[4:]
 
-            self.log.debug("----------------- Beacon ------------------")
-            self.log.debug( "Beacon Recv'd [" + friend + '] RSSI/SNR:[' + rf_rssi + ']/[' + rf_snr + ']')
-            self.log.debug( "[" + friend + '] HASH:[' + beacon_hash + ']')
-            self.lastseen_name = friend
-            self.lastseen_rssi = rf_rssi
-            self.lastseen_snr = rf_snr
-            self.lastseen_time = time.time()
+        if 'DSC3' in network_plaintext:
 
-            hash_repeat_list = hashlib.md5("".join(str(x) for x in sorted(self.repeat_msg_list))).hexdigest()
-            self.beacon_quiet_hash[friend] = beacon_hash
-            if not self.quiet_mode:
-                if self.beacon_quiet_hash[friend] == hash_repeat_list and cmd_hash == hashlib.md5(self.quiet_cmd).hexdigest():
-                    if hash_repeat_list != hashlib.md5('').hexdigest():
-                        self.quiet_mode = True
-                        self.network_equal = True
-                        for node in self.beacon_quiet_confidence:
-                            self.beacon_quiet_confidence[node] = 0
-                        self.repeat_msg_list[:] = []
-                        self.msg_seg_list[:] = []
-                        self.last_repeat_hash = hash_repeat_list
-                        self.log.debug( "Network Equal. Quiet Mode Activated by Peer.")
-                elif self.beacon_quiet_hash[friend] == hash_repeat_list and hash_repeat_list != hashlib.md5('').hexdigest():
-                    self.beacon_quiet_confidence[friend] += 1
-                    self.log.debug( "Network Equal Confidence Increased with ["+friend+"]: " + str(self.beacon_quiet_confidence[friend]))
-                    consensus = 0
-                    for node in self.beacon_quiet_confidence:
-                        if self.beacon_quiet_confidence[node] >= 1:
-                            consensus += 1
-                    if consensus == len(self.beacon_quiet_confidence):
-                        self.quiet_mode = True
-                        self.network_equal = True
-                        for node in self.beacon_quiet_confidence:
-                            self.beacon_quiet_confidence[node] = 0
-                        self.repeat_msg_list[:] = []
-                        self.msg_seg_list[:] = []
-                        self.last_repeat_hash = hash_repeat_list
-                        self.log.debug( "Network Equal. Quiet Mode Activated")
-                elif self.beacon_quiet_hash[friend] != hash_repeat_list:
-                    self.beacon_quiet_confidence[friend] = 0
-                    if self.network_equal:
-                        self.time_network_not_equal = time.time()
-                    self.network_equal = False
-                    self.log.debug( "Network NOT Equal. No Confidence with ["+friend+"]: " + str(self.beacon_quiet_confidence[friend]))
+            self.log.debug("check: %s (%d)" % (binascii.hexlify(network_plaintext), len(network_plaintext)))
+            self.log.debug("VERIFIED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print "network_plaintext: ", network_plaintext
+            print "len: ", len(network_plaintext)
+            packet_sent_time = struct.unpack(">I",msg[:4])
+            packet_ttl = struct.unpack(">I",msg[4:8])
+            packet_mac = network_plaintext[8:12]
+            packet_spare = network_plaintext[12:16]
+            packet_group_cipher = network_plaintext[16:]
+            #self.group_cipher.append(packet_group_cipher)
+            self.log.debug("Packet MAC: " + packet_mac)
+            print "Packet sent: ", packet_sent_time
+            print "Packet TTL: ",  packet_ttl
+            self.log.debug("Packet Spare: " + packet_spare)
+            #Add to Repeat Queue AS-IS
+            self.add_msg_to_repeat_list(network_plaintext)
 
-                elif hash_repeat_list == hashlib.md5('').hexdigest():
-                    tally_empty = 0
-                    for node in self.beacon_quiet_hash:
-                        if self.beacon_quiet_hash[node] == hashlib.md5('').hexdigest():
-                            tally_empty += 1
-                    if tally_empty == len(self.beacon_quiet_hash):
-                        self.network_equal = True
-                        self.log.debug( "Network Equal [empty].")
-            else:
-                self.log.debug( "Network Equal. Quiet Mode Active.")
-            self.log.debug( "Inbound Q/Seg List/Repeat List: " + '[' + str(self.radio_inbound_queue.qsize()) + ']/[' + str(len(self.msg_seg_list)) + ']/['+ str(len(self.repeat_msg_list))+']')
-            return False
+            self.log.debug("Decrypting Group Message")
+            group_cleartext = self.crypto.decrypt(self.group_key, packet_group_cipher)
+            if 'DSC3' in group_cleartext:
+                packet_author = network_plaintext[:8]
+                packet_id = network_plaintext[8:12]
+                packet_spare = network_plaintext[12:16]
+                group_msg = group_cleartext[16:]
+                self.log.debug("Packet Author:" + packet_author)
+                self.log.debug("Packet ID:" + packet_id)
+                self.log.debug("Packet Spare: [" + packet_spare + "]")
+                self.log.debug("Group Msg: " + group_msg)
+                if network_plaintext not in self.network_plaintexts:
+                    self.network_plaintexts.append(network_plaintext)
+                    self.process_group_messages()
         else:
-            return True
+            self.log.debug("Packet Dropped")
+
+    def process_group_messages(self):
+        self.group_cleartexts = []
+        for cipher in self.network_plaintexts:
+            group_cleartext = self.crypto.decrypt(self.group_key, cipher)
+            if 'DSC3' in group_cleartext:
+                packet_author = msg[:8]
+                packet_id = msg[8:12]
+                packet_spare = msg[12:16]
+                group_msg = group_cleartext[16:]
+                self.group_cleartexts.append(packet_author + ':' + group_msg)
+        """
+        self.log.debug("----------------- Beacon ------------------")
+        self.log.debug( "Beacon Recv'd [" + friend + '] RSSI/SNR:[' + rf_rssi + ']/[' + rf_snr + ']')
+        self.log.debug( "[" + friend + '] HASH:[' + beacon_hash + ']')
+        self.lastseen_name = friend
+        self.lastseen_rssi = rf_rssi
+        self.lastseen_snr = rf_snr
+        self.lastseen_time = time.time()
+        """
+
+        return True

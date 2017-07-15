@@ -64,7 +64,7 @@ if __name__ == "__main__":
     iodef.init()
 
     config = Config()
-    crypto = Crypto(config)
+    crypto = Crypto()
 
     message = Message(crypto, config)
     message.start()
@@ -88,10 +88,11 @@ if __name__ == "__main__":
     print "psw from file!!!: ", psw
     sig_pass =str(psw)[:len(psw)/2]
     crypt_pass =str(psw)[len(psw)/2:]
-    if crypto.authenticate_user(crypt_pass, sig_pass, config.alias):
-        ui.main_menu()
-        message.auth = True
-        message.sig_auth = True
+    ui.main_menu()
+    #if crypto.authenticate_user(crypt_pass, sig_pass, config.alias):
+        #ui.main_menu()
+        #message.auth = True
+        #message.sig_auth = True
 
     while isRunning:
         sleep(1)

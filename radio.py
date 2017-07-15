@@ -88,7 +88,7 @@ class Radio(Thread):
                 if (epoch > slot_start and epoch < (slot_end - self.config.tx_deadband)):
                     self.message.is_radio_tx = True
                     if not transmit_ok:
-                        self.message.generate_beacon()
+                        #self.message.generate_beacon()
                         self.log.debug("[TX mode] TDMA Slot Active")
                         #print "[TX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
                     transmit_ok = True
@@ -136,7 +136,7 @@ class Radio(Thread):
                 (rssi, ) = struct.unpack_from('<h', bytes(received_data[:2]))
                 snr = received_data[2] / 4.0
 
-                self.message.radio_inbound_queue.put_nowait([msg,str(rssi)+'|'+str(snr)])
+                self.message.radio_inbound_queue.put_nowait(msg)
                 sleep(0.15)
 
         finally:
@@ -153,13 +153,13 @@ class Radio(Thread):
 
     def process_outbound_msg(self):
         outbound_data = ''
+        #try:
+        #    outbound_data = self.message.radio_beacon_queue.get_nowait()
+        #except Queue.Empty:
         try:
-            outbound_data = self.message.radio_beacon_queue.get_nowait()
+            outbound_data = self.message.radio_outbound_queue.get_nowait()
         except Queue.Empty:
-            try:
-                outbound_data = self.message.radio_outbound_queue.get_nowait()
-            except Queue.Empty:
-                pass
+            pass
         if outbound_data != '':
             self.is_check_outbound = True
             try:

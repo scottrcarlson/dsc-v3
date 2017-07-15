@@ -20,7 +20,7 @@ import logging
 m_IDLE = 0
 m_LOCK = 1
 m_AUTH = 2
-m_RECIPIENT_MENU = 3
+m_SPARE3 = 3
 m_COMPOSE_MENU = 4
 m_COMPOSE = 5
 m_MAIN_MENU = 6
@@ -96,7 +96,9 @@ class UI(Thread):
             else:
                 self.is_idle = True
 
-            self.message.decrypt_msg_thread(self.display.view_msg_friend)
+            #self.message.decrypt_msg_thread(self.display.view_msg_friend)
+
+            #Process message.network_plaintexts function here!!
             self.event.wait(5)
 
     def stop(self):
@@ -152,10 +154,6 @@ class UI(Thread):
             self.display.row_index -= 1
             if self.display.row_index < 0:
                 self.display.row_index = 0
-        elif self.display.mode == m_RECIPIENT_MENU:
-            self.display.row_index -= 1
-            if self.display.row_index < 0:
-                self.display.row_index = 0
         elif self.display.mode == m_COMPOSE_MENU:
             self.display.row_index -= 1
             if self.display.row_index < 0:
@@ -187,18 +185,14 @@ class UI(Thread):
             self.display.row_index += 1
             if self.display.row_index >= len(scr.main_menu):
                 self.display.row_index = len(scr.main_menu) -1
-        elif self.display.mode == m_RECIPIENT_MENU:
-            self.display.row_index += 1
-            if self.display.row_index >= len(self.message.friends):
-                self.display.row_index = len(self.message.friends) -1
         elif self.display.mode == m_COMPOSE_MENU:
             self.display.row_index += 1
             if self.display.row_index >= len(scr.compose_menu):
                 self.display.row_index = len(scr.compose_menu) -1
         elif self.display.mode == m_MSG_VIEWER:
             self.display.row_index += 5
-            if self.display.row_index >= len(self.message.cleartext_msg_thread[self.display.view_msg_friend]):
-                self.display.row_index = len(self.message.cleartext_msg_thread[self.display.view_msg_friend]) -1
+            if self.display.row_index >= len(self.message.cleartext_msg_thread):
+                self.display.row_index = len(self.message.cleartext_msg_thread) -1
         elif self.display.mode == m_SYSTEM_MENU:
             self.display.row_index += 1
             if self.display.row_index >= len(scr.system_menu):
@@ -315,7 +309,7 @@ class UI(Thread):
                 if self.display.col_index == 0:
                     self.display.dialog_msg = "Message Sent!"
                     self.display.dialog_msg3 = "==[Press AnyKey]=="
-                    self.message.process_composed_msg(self.message.compose_msg, self.message.compose_to)
+                    self.message.process_composed_msg(self.message.compose_msg)
                     self.display.row_index = 0
                     self.display.col_index = 0
                     self.display.mode = m_DIALOG
@@ -328,16 +322,8 @@ class UI(Thread):
                     self.main_menu()
         elif self.display.mode == m_MSG_VIEWER:
             self.log.debug("User Updating Msg Thread.")
-            self.message.decrypt_msg_thread(self.display.view_msg_friend)
-        elif self.display.mode == m_RECIPIENT_MENU:
-            self.message.compose_to = self.message.friends[self.display.row_index]
-            self.display.view_msg_friend = self.message.friends[self.display.row_index]
-            self.log.info( "Decrypting Msg Thread with " + self.display.view_msg_friend)
-            self.message.decrypt_msg_thread(self.display.view_msg_friend)
-            self.log.info( "Recipient: "+ self.message.compose_to)
-            self.display.row_index = 0
-            self.display.col_index = 0
-            self.display.mode = self.display.dialog_next_mode
+            #self.message.process_group_messages() #called when new msg is processed
+
         elif self.display.mode == m_COMPOSE_MENU:
             self.message.compose_msg = scr.compose_menu[self.display.row_index]
             self.display.row_index = 0
@@ -348,13 +334,13 @@ class UI(Thread):
             if self.display.row_index == 0:
                 self.display.row_index = 0
                 self.display.col_index = 0
-                self.display.dialog_next_mode = m_COMPOSE_MENU
-                self.display.mode = m_RECIPIENT_MENU
+                #self.display.dialog_next_mode = m_COMPOSE_MENU
+                self.display.mode = m_COMPOSE_MENU
             elif self.display.row_index == 1:
                 self.display.row_index = 0
                 self.display.col_index = 0
                 self.display.dialog_next_mode = m_MSG_VIEWER
-                self.display.mode = m_RECIPIENT_MENU
+                self.display.mode = m_MAIN_MENU
             elif self.display.row_index == 2:
                 self.display.mode = m_STATUS
                 #self.log.debug( "Generating TRAFFIC")
@@ -524,8 +510,8 @@ class UI(Thread):
             #print "Sig psw: ", sig_pass
             if self.crypto.authenticate_user(crypt_pass, sig_pass, self.config.alias):
                 self.main_menu()
-                self.message.auth = True
-                self.message.sig_auth = True
+                #self.message.auth = True
+                #self.message.sig_auth = True
             else:
                 print self.config.alias
                 if self.config.alias == "unreg":
