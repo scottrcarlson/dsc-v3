@@ -124,7 +124,7 @@ class Message(Thread):
 
         author = 'RUSSET01'
         spare = "    " # 4 bytes
-        group_cleartext = 'AAAAAAAADSC3'+spare+msg
+        group_cleartext = author+'DSC3'+spare+msg
         self.log.debug("Spare size: [" + str(len(spare)) + "]")
         self.log.debug("author size: " + str(len(author)))
         self.log.debug("***encrypt GROUP ***************************")
@@ -141,7 +141,7 @@ class Message(Thread):
         # Total 240 bytes OTA mesage cipher
         timestamp = struct.pack(">I",time.time())
         ttl_sp = 120 # 2 minutes
-        ttl = binascii.hexlify(struct.pack(">I",ttl_sp))
+        ttl = struct.pack(">I",ttl_sp)
         self.log.debug("***encrypt NETWORK *************************** FUCK IT")
         ota_cipher = self.crypto.encrypt(self.network_key, timestamp+ttl+'DSC3'+'    '+group_cipher)
         #self.log.debug("ota_cipher: " + group_cipher + " size: " + str(len(ota_cipher)))
@@ -171,25 +171,30 @@ class Message(Thread):
         self.log.debug("key:" + self.network_key + " size:" + str(len(self.network_key)))
 
         network_plaintext = self.crypto.decrypt(self.network_key, str(msg))
-        self.log.debug("group cipher:" + binascii.hexlify(network_plaintext))
+        self.log.debug("network plaintext:" + binascii.hexlify(network_plaintext))
 
-        network_plaintext = network_plaintext[4:]
+        #network_plaintext = network_plaintext[4:] # TODO: WTF
+        """
+        596a5929
+        596a602c
+        596a6073
+        """
 
         if 'DSC3' in network_plaintext:
 
             self.log.debug("check: %s (%d)" % (binascii.hexlify(network_plaintext), len(network_plaintext)))
             self.log.debug("VERIFIED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print "network_plaintext: ", network_plaintext
-            print "len: ", len(network_plaintext)
-            packet_sent_time = struct.unpack(">I",msg[:4])
-            packet_ttl = struct.unpack(">I",msg[4:8])
+            #print "network_plaintext: ", network_plaintext
+            #print "len: ", len(network_plaintext)
+            packet_sent_time = struct.unpack(">I",network_plaintext[:4])
+            packet_ttl = struct.unpack(">I",network_plaintext[4:8])
             packet_mac = network_plaintext[8:12]
             packet_spare = network_plaintext[12:16]
             packet_group_cipher = network_plaintext[16:]
             #self.group_cipher.append(packet_group_cipher)
             self.log.debug("Packet MAC: " + packet_mac)
-            print "Packet sent: ", packet_sent_time
-            print "Packet TTL: ",  packet_ttl
+            self.log.debug("Packet sent: " + str(packet_sent_time))
+            self.log.debug("Packet TTL: " +  str(packet_ttl))
             self.log.debug("Packet Spare: " + packet_spare)
             #Add to Repeat Queue AS-IS
             self.add_msg_to_repeat_list(network_plaintext)
@@ -197,11 +202,11 @@ class Message(Thread):
             self.log.debug("Decrypting Group Message")
             group_cleartext = self.crypto.decrypt(self.group_key, packet_group_cipher)
             if 'DSC3' in group_cleartext:
-                packet_author = network_plaintext[:8]
-                packet_id = network_plaintext[8:12]
-                packet_spare = network_plaintext[12:16]
+                packet_author = group_cleartext[:8]
+                packet_id = group_cleartext[8:12]
+                packet_spare = group_cleartext[12:16]
                 group_msg = group_cleartext[16:]
-                print packet_author
+                #print packet_author
                 self.log.debug("Packet Author:" + packet_author)
                 self.log.debug("Packet ID:" + packet_id)
                 self.log.debug("Packet Spare: [" + packet_spare + "]")
@@ -210,7 +215,7 @@ class Message(Thread):
                     self.network_plaintexts.append(network_plaintext)
                     self.process_group_messages()
         else:
-            self.log.debug("Packet Dropped")
+            self.log.debug("Packet Dropped due to missing MAC")
 
     def process_group_messages(self):
         self.group_cleartexts = []
