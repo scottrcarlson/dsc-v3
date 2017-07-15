@@ -122,9 +122,9 @@ class Message(Thread):
         #  Total 224 bytes group message Cipher
 
 
-        author = 'RUSSET00'
+        author = 'RUSSET01'
         spare = "    " # 4 bytes
-        group_cleartext = author+'DSC3'+spare+msg
+        group_cleartext = '12345678DSC3'+spare+msg
         self.log.debug("Spare size: [" + str(len(spare)) + "]")
         self.log.debug("author size: " + str(len(author)))
         self.log.debug("***encrypt GROUP ***************************")
@@ -135,7 +135,7 @@ class Message(Thread):
 
         # Network Message Packet
         # 4 bytes for "sent-at" time in epoch
-        # 4 bytes time to live in seconds
+        # 4 bytes time to live iFpn seconds
         # 8 bytes spare
         # 224 byte group cipher
         # Total 240 bytes OTA mesage cipher
@@ -200,6 +200,7 @@ class Message(Thread):
                 packet_id = network_plaintext[8:12]
                 packet_spare = network_plaintext[12:16]
                 group_msg = group_cleartext[16:]
+                print packet_author
                 self.log.debug("Packet Author:" + packet_author)
                 self.log.debug("Packet ID:" + packet_id)
                 self.log.debug("Packet Spare: [" + packet_spare + "]")
