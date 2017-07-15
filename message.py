@@ -6,6 +6,7 @@ import hashlib
 import logging
 import struct
 import binascii
+import datetime
 
 # OLD RE-WORK DOCUMENTION WHEN FINISHED WITH IMPLEMENATION
 # Message thread is responsible for producing and consuming inbound/outbound radio packets via Queues.
@@ -193,8 +194,8 @@ class Message(Thread):
             packet_group_cipher = network_plaintext[16:]
             #self.group_cipher.append(packet_group_cipher)
             self.log.debug("Packet MAC: " + packet_mac)
-            self.log.debug("Packet sent: " + str(packet_sent_time))
-            self.log.debug("Packet TTL: " +  str(packet_ttl))
+            self.log.debug("Packet sent: " + datetime.datetime.fromtimestamp(packet_sent_time).strftime("%Y-%m-%d %H:%M:%S"))
+            self.log.debug("Packet TTL: " +  str(packet_ttl) + " seconds")
             self.log.debug("Packet Spare: " + packet_spare)
             #Add to Repeat Queue AS-IS
             self.add_msg_to_repeat_list(network_plaintext)
