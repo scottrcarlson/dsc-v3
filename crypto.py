@@ -23,7 +23,7 @@ class Crypto(object):
 		self.log = logging.getLogger(self.__class__.__name__)
 		self.NETWORK_KEY = "mykey" # TODO: take input from keypad
 		self.GROUP_KEY = "mykey2"  # TODO: take input from keypad
-		self.log.setLevel(logging.DEBUG)
+		self.log.setLevel(logging.WARN)
 
 	def encrypt(self, key, pt):
 		self.log.debug("was asked to encrypt this plaintext (len: %d):  %s" % (len(pt), binascii.hexlify(pt)))

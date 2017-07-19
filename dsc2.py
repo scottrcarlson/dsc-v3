@@ -81,14 +81,15 @@ if __name__ == "__main__":
 
     ui = UI(display,message, crypto, config)
     ui.start()
+    ui.auth()
 
     # Development Purposes only (Hard Coded Keys!!
-    with open('/home/dsc/dsc2/key', 'r') as psw_file:
-        psw = psw_file.readline().rstrip()
-    print "psw from file!!!: ", psw
-    sig_pass =str(psw)[:len(psw)/2]
-    crypt_pass =str(psw)[len(psw)/2:]
-    ui.main_menu()
+    #with open('/home/dsc/dsc2/key', 'r') as psw_file:
+    #    psw = psw_file.readline().rstrip()
+    #print "psw from file!!!: ", psw
+    #sig_pass =str(psw)[:len(psw)/2]
+    #crypt_pass =str(psw)[len(psw)/2:]
+
     #if crypto.authenticate_user(crypt_pass, sig_pass, config.alias):
         #ui.main_menu()
         #message.auth = True

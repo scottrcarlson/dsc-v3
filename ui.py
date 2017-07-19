@@ -191,8 +191,8 @@ class UI(Thread):
                 self.display.row_index = len(scr.compose_menu) -1
         elif self.display.mode == m_MSG_VIEWER:
             self.display.row_index += 5
-            if self.display.row_index >= len(self.message.cleartext_msg_thread):
-                self.display.row_index = len(self.message.cleartext_msg_thread) -1
+            if self.display.row_index >= len(self.message.group_cleartexts):
+                self.display.row_index = len(self.message.group_cleartexts) -1
         elif self.display.mode == m_SYSTEM_MENU:
             self.display.row_index += 1
             if self.display.row_index >= len(scr.system_menu):
@@ -339,8 +339,8 @@ class UI(Thread):
             elif self.display.row_index == 1:
                 self.display.row_index = 0
                 self.display.col_index = 0
-                self.display.dialog_next_mode = m_MSG_VIEWER
-                self.display.mode = m_MAIN_MENU
+                self.display.dialog_next_mode = m_MAIN_MENU
+                self.display.mode = m_MSG_VIEWER
             elif self.display.row_index == 2:
                 self.display.mode = m_STATUS
                 #self.log.debug( "Generating TRAFFIC")

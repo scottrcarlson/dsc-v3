@@ -245,14 +245,14 @@ class Display(Thread):
                         self.viz_min = self.viz_max - self.screen_row_size
                     #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
 
-                    if len(self.message.cleartext_msg_thread) < self.viz_max:
-                        max = len(self.message.cleartext_msg_thread)
+                    if len(self.message.group_cleartexts) < self.viz_max:
+                        max = len(self.message.group_cleartexts)
                     else:
                         max = self.viz_max
                     for i in range(self.viz_min,max):
-                        draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), self.message.cleartext_msg_thread[i], font=self.font, fill=255)
-                    else:
-                        draw.text((0, 0),"No Messages", font=self.font, fill=255)
+                        draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), self.message.group_cleartexts[i], font=self.font, fill=255)
+                    #else:
+                        #draw.text((0, 0),"No Messages", font=self.font, fill=255)
 
                     draw.line((121,60,124,63), fill=255)
                     draw.line((124,63,127,60), fill=255)
