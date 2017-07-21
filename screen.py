@@ -4,13 +4,21 @@
 #----------------------------
 
 main_menu = {
-    0:"Send New Msg",
+    0:"Send Msg",
     1:"View Msgs",
     2:"Status",
-    3:"System Settings",
-    4:"Shutdown System"
+    3:"Settings",
+    #4:"Shutdown System"
 }
 
+settings_menu = {
+    0:"Airplane Mode: OFF ",
+    1:"Beacon: ENABLED",
+    2:"TX Time: 5 sec",
+    3:"TX Deadband: 1 sec",
+    4:"Total Nodes: 2",
+    5:"TDMA Slot: 1",
+}
 
 system_menu = {
     0:"Update Software",
@@ -20,45 +28,6 @@ system_menu = {
     4:"Wipe USB Drv",
     5:"Factory Reset",
 }
-
-export_keys_menu = {
-    0:"Export Keys",
-    1:"---------------",
-    2:"Insert USB Drv",
-    3:"Cancel",
-    4:"OK"
-}
-
-import_keys_menu = {
-    0:"Import Keys",
-    1:"---------------",
-    2:"Insert USB Drv",
-    3:"Cancel",
-    4:"OK"
-}
-
-generate_keys_menu = {
-    0:"Generate Keys",
-    1:"---------------",
-    2:"WARN: DATA LOSS",
-    3:"Cancel",
-    4:"OK"
-}
-
-update_software_menu = {
-    0:"Update Software?",
-    1:"---------------",
-    2:"No",
-    3:"Yes"
-}
-
-factory_reset_menu = {
-    0:"Factory Reset?",
-    1:"---------------",
-    2:"No",
-    3:"Yes"
-}
-
 
 compose_menu = {
     0:"",

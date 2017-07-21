@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # ----------------------------
-# --- DSC2 UI THREAD
+# --- DSC3 UI THREAD
 #----------------------------
 from time import sleep
 import time
@@ -27,11 +27,11 @@ m_MAIN_MENU = 6
 m_DIALOG = 7
 m_MSG_VIEWER = 8
 m_DIALOG_YESNO = 9
-m_SYSTEM_MENU = 10
+m_SYSTEM_MENU = 10  # chopping block
 m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
-m_STATUS_LASTSEEN = 14
+#m_STATUS_LASTSEEN = 14
 
 #DIALOG COMMAND (If Yes is Chosen)
 cmd_SHUTDOWN = 0
@@ -162,10 +162,10 @@ class UI(Thread):
             self.display.row_index -= 5
             if self.display.row_index < 0:
                 self.display.row_index = 0
-        elif self.display.mode == m_SYSTEM_MENU:
-            self.display.row_index -= 1
-            if self.display.row_index < 0:
-                self.display.row_index = 0
+        #elif self.display.mode == m_SYSTEM_MENU:
+        #    self.display.row_index -= 1
+        #    if self.display.row_index < 0:
+        #        self.display.row_index = 0
 
 
     def key_down(self, channel):
@@ -193,10 +193,10 @@ class UI(Thread):
             self.display.row_index += 5
             if self.display.row_index >= len(self.message.group_cleartexts):
                 self.display.row_index = len(self.message.group_cleartexts) -1
-        elif self.display.mode == m_SYSTEM_MENU:
-            self.display.row_index += 1
-            if self.display.row_index >= len(scr.system_menu):
-                self.display.row_index = len(scr.system_menu) -1
+        #elif self.display.mode == m_SYSTEM_MENU:
+        #    self.display.row_index += 1
+        #    if self.display.row_index >= len(scr.system_menu):
+        #        self.display.row_index = len(scr.system_menu) -1
 
 
     def key_left(self, channel):
@@ -223,8 +223,8 @@ class UI(Thread):
             self.display.col_index -= 1
             if self.display.col_index < 0:
                 self.display.col_index = 0
-        elif self.display.mode == m_STATUS_LASTSEEN:
-            self.display.mode = m_STATUS
+        #elif self.display.mode == m_STATUS_LASTSEEN:
+        #    self.display.mode = m_STATUS
 
     def key_right(self, channel):
         self.is_idle = False
@@ -249,8 +249,8 @@ class UI(Thread):
             self.display.col_index += 1
             if self.display.col_index > 1:
                 self.display.col_index = 1
-        elif self.display.mode == m_STATUS:
-            self.display.mode = m_STATUS_LASTSEEN
+        #elif self.display.mode == m_STATUS:
+        #    self.display.mode = m_STATUS_LASTSEEN
 
 
     def key_enter(self, channel):
@@ -346,16 +346,17 @@ class UI(Thread):
                 #self.log.debug( "Generating TRAFFIC")
                 #for friend in self.message.friends:
                     #self.message.process_composed_msg('Hello DSCv2.', friend)
-            elif self.display.row_index == 3:
-                self.display.row_index = 0
-                self.display.col_index = 0
-                self.display.mode = m_SYSTEM_MENU
+            #elif self.display.row_index == 3:
+                #self.display.row_index = 0
+                #self.display.col_index = 0
+                #self.display.mode = m_SYSTEM_MENU
             elif self.display.row_index == 4:
                 self.display.dialog_cmd = cmd_SHUTDOWN
                 self.display.dialog_msg = "Shutdown?"
                 self.display.dialog_msg2 = "Are you not entertained?"
                 self.display.col_index = 0
                 self.display.mode = m_DIALOG_YESNO
+
         elif self.display.mode == m_SYSTEM_MENU:
             self.log.debug( "SystemMenu Selected: " + scr.system_menu[self.display.row_index])
             if self.display.row_index == 0:     #Update Software

@@ -28,7 +28,7 @@ m_SYSTEM_MENU = 10
 m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
-m_STATUS_LASTSEEN = 14
+#m_STATUS_LASTSEEN = 14
 
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
@@ -95,13 +95,14 @@ class Display(Thread):
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
                     #draw.text((105, 52), 'SYNC', font=self.font, fill=255)
-                    current_datetime = time.strftime("%H:%M:%S")
-                    #draw.text((6, 0), current_datetime, font=self.font, fill=255)
+
+                    #current_datetime = time.strftime("%H:%M:%S")
+                    #draw.text((6, 40), current_datetime, font=self.font, fill=255)
 
 
                     #draw.text((0, 52), self.version, font=self.font, fill=255)
-                    draw.text((54, 40), 'psw?', font=self.font, fill=255)
-                    draw.text((60, 52), '      equal', font=self.font, fill=255)
+                    #draw.text((54, 40), 'psw?', font=self.font, fill=255)
+                    #draw.text((60, 52), '      equal', font=self.font, fill=255)
 
             #------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS:
@@ -136,16 +137,16 @@ class Display(Thread):
                     #    draw.text((35, 52), '[' + radio_mode + '] net not eq', font=self.font, fill=255)
                     #draw.text((0, 55), '[0] msgs unread', font=self.font, fill=255)
             #------[STATUS SCREEN]------------------------------------------------------------------$
-            elif self.mode == m_STATUS_LASTSEEN:
-                    with canvas(self.device) as draw:
-                        logo = Image.open('/home/pi/dsc.png')
-                        draw.bitmap((0, 0), logo, fill=1)
-                        draw.text((0, 30), 'Beacon Recvd: ' + self.message.lastseen_name, font=self.font, fill=255)
-                        draw.text((0, 40), 'RSSI/SNR: [' + str(self.message.lastseen_rssi) +'][' + str(self.message.lastseen_snr) + ']', font=self.font, fill=255)
-                        if self.message.lastseen_time == 0:
-                            draw.text((0, 50), 'Never seen.', font=self.font, fill=255)
-                        else:
-                            draw.text((0, 50), str( round((time.time() - self.message.lastseen_time) / 60.0,1) ) + ' minutes ago', font=self.font, fill=255)
+            #elif self.mode == m_STATUS_LASTSEEN:
+            #        with canvas(self.device) as draw:
+            #            logo = Image.open('/home/pi/dsc.png')
+            #            draw.bitmap((0, 0), logo, fill=1)
+            #            #draw.text((0, 30), 'Beacon Recvd: ' + self.message.lastseen_name, font=self.font, fill=255)
+            #            draw.text((0, 40), 'RSSI/SNR: [' + str(self.message.lastseen_rssi) +'][' + str(self.message.lastseen_snr) + ']', font=self.font, fill=255)
+            #            if self.message.lastseen_time == 0:
+            #                draw.text((0, 50), 'Never seen.', font=self.font, fill=255)
+            #            else:
+            #                draw.text((0, 50), str( round((time.time() - self.message.lastseen_time) / 60.0,1) ) + ' minutes ago', font=self.font, fill=255)
 
         #draw.text((0, 55), '[0] msgs unread', font=self.font, fill=255)
             #------[DIALOG]-------------------------------------------------------------------    $
@@ -301,14 +302,8 @@ class Display(Thread):
                 with canvas(self.device) as draw:
                     draw.line((121,3,124,0), fill=255)
                     draw.line((124,0,127,3), fill=255)
-                    if (self.row_index < self.viz_min):
-                        self.viz_max -= self.viz_min - self.row_index
-                        self.viz_min = self.row_index
-                    if (self.row_index >= self.viz_max):
-                        self.viz_max = self.row_index + 1
-                        self.viz_min = self.viz_max - self.screen_row_size
                     #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    for i in range(self.viz_min,self.viz_max):
+                    for i in range(0,len(scr.main_menu)):
                         draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
                     draw.line((121,60,124,63), fill=255)
                     draw.line((124,63,127,60), fill=255)
