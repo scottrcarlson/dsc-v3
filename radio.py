@@ -44,7 +44,7 @@ class Radio(Thread):
         self.prev_total_exceptions = 0
 
         self.last_tx = time.time()
-        self.tx_throttle = 1 # Should we calculate based on rf parameters and packet size?
+        self.tx_throttle = 1 # Should we calculate based on rf parameters and packet size? YES
         self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
         self.tdma_frame = self.tdma_slot_width * self.config.tdma_total_slots
 
@@ -71,10 +71,10 @@ class Radio(Thread):
                 self.last_tx = time.time()
                 self.process_outbound_msg()
 
-            if self.total_sent != self.prev_total_sent or self.total_recv != self.prev_total_recv or self.total_exceptions != self.prev_total_exceptions:
-                self.prev_total_sent = self.total_sent
-                self.prev_total_recv = self.total_recv
-                self.prev_total_exceptions = self.total_exceptions
+            #if self.total_sent != self.prev_total_sent or self.total_recv != self.prev_total_recv or self.total_exceptions != self.prev_total_exceptions:
+            #    self.prev_total_sent = self.total_sent
+            #    self.prev_total_recv = self.total_recv
+            #    self.prev_total_exceptions = self.total_exceptions
                 #print "== Sent: [",self.total_sent,"]  Recvd:[",self.total_recv,"] Radio Exceptions:[",self.total_exceptions,"] =="
 
             if (time.time() - last_checked_tdma) > 0.5: #Check to see if our TDMA Slot is Active
@@ -158,6 +158,9 @@ class Radio(Thread):
         #except Queue.Empty:
         try:
             outbound_data = self.message.radio_outbound_queue.get_nowait()
+
+            self.tx_throttle = ((1.0 / 510.0) * len(outbound_data)) + 0.2 #Scale found empiracaly (ie. no radio errors)
+            self.log.debug(str(len(outbound_data)) + " bytes/tx_throttle=" + str(self.tx_throttle))
         except Queue.Empty:
             pass
         if outbound_data != '':

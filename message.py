@@ -123,8 +123,6 @@ class Message(Thread):
         #  8 bytes spare
         #  208 bytes for Message
         #  Total 224 bytes group message Cipher
-
-
         author = 'RUSSET01'
         spare = "    " # 4 bytes
         group_cleartext = author+'DSC3'+spare+msg
