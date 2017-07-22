@@ -8,9 +8,9 @@ import struct
 import binascii
 import datetime
 
-# OLD RE-WORK DOCUMENTION WHEN FINISHED WITH IMPLEMENATION
-# Message thread is responsible for producing and consuming inbound/outbound radio packets via Queues.
+# Message thread is responsible for producing and consuming inbound/outbound radio packets via Queues
 # Perodically fill outbound queue with packets on the repeat list
+# Processing Packets / Validating / De-Duping       
 class Message(Thread):
     def __init__(self, crypto, config):
         Thread.__init__(self)

@@ -1,11 +1,11 @@
 #!/usr/bin/python
-# ----------------------------
+
 # --- OLED Display Thread----------------------------
+from time import sleep
+import RPi.GPIO as GPIO
 from oled.device import ssd1306, sh1106
 from oled.render import canvas
 from PIL import ImageDraw, Image, ImageFont
-from time import sleep
-import RPi.GPIO as GPIO
 import iodef
 import os
 from threading import *
@@ -15,16 +15,15 @@ import logging
 
 #DISPLAY MODES
 m_IDLE = 0
-m_LOCK = 1
-m_AUTH = 2
+m_MAIN_MENU = 6
+m_COMPOSE = 5
+m_SPLASH = 2
+m_MSG_VIEWER = 8
+
 m_SPARE3 = 3
 m_COMPOSE_MENU = 4
-m_COMPOSE = 5
-m_MAIN_MENU = 6
 m_DIALOG = 7
-m_MSG_VIEWER = 8
 m_DIALOG_YESNO = 9
-m_SYSTEM_MENU = 10
 m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
@@ -40,11 +39,10 @@ class Display(Thread):
         self.reset()
         self.config = config
         self.version = version
+        self.message = message
     	# TODO: gracefully handle exception when OLED absent
         self.device = sh1106(port=1, address=0x3C)
         self.font = ImageFont.load_default()
-        #self.font = ImageFont.truetype('./C&C Red Alert [INET].ttf', 12)#mageFont.load_default()
-        #self.font_txt = ImageFont.truetype('./C&C Red Alert [INET].ttf', 12)
         self.mode = m_IDLE
 
         self.row_index = 0
@@ -56,11 +54,6 @@ class Display(Thread):
         self.viz_min = 0
         self.viz_max = self.screen_row_size
 
-
-
-        self.message = message
-
-        #Show a Msg for x amount of seconds
         self.dialog_msg = ""
         self.dialog_msg2 = ""
         self.dialog_msg3 = ""
@@ -76,34 +69,26 @@ class Display(Thread):
             #------[IDLE]--------------------------------------------------------------------------
             if self.mode == m_IDLE:
                 with canvas(self.device) as draw:
+                    #Does this cost energy? Should we only do this first pass?
                     pass
-            #------[LOCK SCREEN]------------------------------------------------------------------$
-            elif self.mode == m_LOCK:
-                with canvas(self.device) as draw:
-                    logo = Image.open('/home/pi/dsc.png')
-                    draw.bitmap((0, 20), logo, fill=1)
-                    #draw.text((105, 52), 'SYNC', font=self.font, fill=255)
-                    current_datetime = time.strftime("%H:%M:%S")
-                    draw.text((6, 0), current_datetime, font=self.font, fill=255)
-                    draw.text((6, 10), 'dirt   simple  comms', font=self.font, fill=255)
-                    draw.text((0, 52), self.version, font=self.font, fill=255)
-                    draw.text((45, 52), 'insert key', font=self.font, fill=255)
-            #------[AUTH SCREEN]------------------------------------------------------------------$
-            elif self.mode == m_AUTH:
+            #------[SPLASH SCREEN]------------------------------------------------------------------$
+            elif self.mode == m_SPLASH:
                 with canvas(self.device) as draw:
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
-                    #draw.text((105, 52), 'SYNC', font=self.font, fill=255)
+          #------[MAIN MENU]----------------------------------------------------------------------
+            elif self.mode == m_MAIN_MENU:
+                with canvas(self.device) as draw:
+                    draw.line((121,3,124,0), fill=255)
+                    draw.line((124,0,127,3), fill=255)
+                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                    for i in range(0,len(scr.main_menu)):
+                        draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
+                    draw.line((121,60,124,63), fill=255)
+                    draw.line((124,63,127,60), fill=255)
 
-                    #current_datetime = time.strftime("%H:%M:%S")
-                    #draw.text((6, 40), current_datetime, font=self.font, fill=255)
-
-
-                    #draw.text((0, 52), self.version, font=self.font, fill=255)
-                    #draw.text((54, 40), 'psw?', font=self.font, fill=255)
-                    #draw.text((60, 52), '      equal', font=self.font, fill=255)
-
+                    draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
             #------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS:
                 with canvas(self.device) as draw:
@@ -173,7 +158,6 @@ class Display(Thread):
                     draw.text((0, 0), self.dialog_msg, font=self.font, fill=255)
                     draw.text((0, 10), self.dialog_msg2, font=self.font, fill=255)
                     draw.text((0, 20), self.dialog_msg3, font=self.font, fill=255)
-
             #------[DIALOG YESNO]-----------------------------------------------------------------$
             elif self.mode == m_DIALOG_YESNO:
                 with canvas(self.device) as draw:
@@ -184,7 +168,6 @@ class Display(Thread):
                         draw.text((30, 40), '<NO>     YES ', font=self.font, fill=255)
                     elif self.col_index == 1:
                         draw.text((30, 40), ' NO     <YES> ', font=self.font, fill=255)
-
            #------[MSG COMPOSE MENU]-------
             elif self.mode == m_COMPOSE_MENU:
                 with canvas(self.device) as draw:
@@ -206,31 +189,6 @@ class Display(Thread):
                         draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.compose_menu[i], font=self.font, fill=255)
                     draw.line((121,60,124,63), fill=255)
                     draw.line((124,63,127,60), fill=255)
-
-                    draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
-
-            #------[SYSTEM MENU]-------
-            elif self.mode == m_SYSTEM_MENU:
-                with canvas(self.device) as draw:
-                    draw.line((121,3,124,0), fill=255)
-                    draw.line((124,0,127,3), fill=255)
-                    if (self.row_index < self.viz_min):
-                        self.viz_max -= self.viz_min - self.row_index
-                        self.viz_min = self.row_index
-                    if (self.row_index >= self.viz_max):
-                        self.viz_max = self.row_index + 1
-                        self.viz_min = self.viz_max - self.screen_row_size
-                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    if len(scr.system_menu) < self.viz_max:
-                        max = len(scr.system_menu)
-                    else:
-                        max = self.viz_max
-
-                    for i in range(self.viz_min,max):
-                        draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.system_menu[i], font=self.font, fill=255)
-                    draw.line((121,60,124,63), fill=255)
-                    draw.line((124,63,127,60), fill=255)
-
                     draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
 
             #------[MSG THREAD VIEWER]-------
@@ -259,7 +217,6 @@ class Display(Thread):
                     draw.line((124,63,127,60), fill=255)
 
                     #draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
-
           #------[COMPOSE MSG]----------------------------------------------------------------
             elif self.mode == m_COMPOSE:
                 self.row = 51 + (self.row_index * self.row_height)
@@ -297,18 +254,6 @@ class Display(Thread):
                         if self.col_index == 0:
                             draw.text((0, 28), '<DONE>', font=self.font, fill=255)
 
-          #------[MAIN MENU]----------------------------------------------------------------------
-            elif self.mode == m_MAIN_MENU:
-                with canvas(self.device) as draw:
-                    draw.line((121,3,124,0), fill=255)
-                    draw.line((124,0,127,3), fill=255)
-                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    for i in range(0,len(scr.main_menu)):
-                        draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
-                    draw.line((121,60,124,63), fill=255)
-                    draw.line((124,63,127,60), fill=255)
-
-                    draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
             self.event.wait(0.04)
 
         with canvas(self.device) as draw:
