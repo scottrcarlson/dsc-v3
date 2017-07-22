@@ -20,12 +20,8 @@ class Radio(Thread):
         Thread.__init__(self)
         self.event = Event()
         self.log = logging.getLogger(self.__class__.__name__)
-        #handler = logging.StreamHandler()
-        #formatter = logging.Formatter(
-        #        '%(name)-12s| %(levelname)-8s| %(message)s')
-        #handler.setFormatter(formatter)
-        #self.log.addHandler(handler)
-        #self.log.setLevel(logging.DEBUG)
+        
+        self.log.setLevel(logging.INFO)
 
         self.serial_device = serial_device
         self.config = config

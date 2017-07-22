@@ -11,9 +11,8 @@ CONFIG_FILE = "dsc.config"
 
 class Config(object):
     def __init__(self):
-        self.alias = "unreg"
         self.tdma_slot = 0
-        self.tdma_total_slots = 1
+        self.tdma_total_slots = 2
         self.tx_time = 4
         self.tx_deadband = 1
         self.cfg = ConfigParser.ConfigParser()
@@ -36,7 +35,6 @@ class Config(object):
             if not is_exist:
                 print "Generating config file."
                 self.cfg.add_section('Network')
-            self.cfg.set('Network','Alias',self.alias)
             self.cfg.set('Network','TDMA_Slot',self.tdma_slot)
             self.cfg.set('Network','TDMA_Total_Slots',self.tdma_total_slots)
             self.cfg.set('Network','TX_Time',self.tx_time)
@@ -45,9 +43,7 @@ class Config(object):
 
     def load_config(self):
         self.cfg.read(CONFIG_PATH + '/' + CONFIG_FILE)
-        self.alias = self.cfg.get("Network","Alias")
-        print "Your Alias:", self.alias
         self.tdma_slot = self.cfg.getint("Network","TDMA_Slot")
         self.tdma_total_slots = self.cfg.getint("Network","TDMA_Total_Slots")
-        self.tx_time = self.cfg.getfloat("Network","TX_Time")
-        self.tx_deadband = self.cfg.getfloat("Network","TX_Deadband")
+        self.tx_time = self.cfg.getint("Network","TX_Time")
+        self.tx_deadband = self.cfg.getint("Network","TX_Deadband")

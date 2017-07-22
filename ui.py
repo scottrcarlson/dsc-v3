@@ -19,7 +19,7 @@ m_MAIN_MENU = 6
 m_COMPOSE = 5
 m_SPLASH = 2
 m_MSG_VIEWER = 8
-
+m_SETTINGS = 1
 
 m_IDLE = 0
 m_LOCK = 1
@@ -94,6 +94,9 @@ class UI(Thread):
     def splash(self):
         self.display.mode = m_SPLASH
 
+    def reg(self): 
+        self.display.mode = m_REG
+
     def main_menu(self):
         self.display.row_index = 0
         self.display.mode = m_MAIN_MENU
@@ -133,6 +136,10 @@ class UI(Thread):
             self.display.row_index -= 5
             if self.display.row_index < 0:
                 self.display.row_index = 0
+        elif self.display.mode == m_SETTINGS:
+            self.display.row_index -= 1
+            if self.display.row_index < 1:
+                self.display.row_index = 1
 
     def key_down(self, channel):
         self.is_idle = False
@@ -157,6 +164,10 @@ class UI(Thread):
             self.display.row_index += 5
             if self.display.row_index >= len(self.message.group_cleartexts):
                 self.display.row_index = len(self.message.group_cleartexts) -1
+        elif self.display.mode == m_SETTINGS:
+            self.display.row_index += 1
+            if self.display.row_index > 4:
+                self.display.row_index = 4
 
     def key_left(self, channel):
         self.is_idle = False
@@ -180,6 +191,23 @@ class UI(Thread):
             self.display.col_index -= 1
             if self.display.col_index < 0:
                 self.display.col_index = 0
+        elif self.display.mode == m_SETTINGS:
+            if self.display.row_index == 1:
+                self.config.tdma_total_slots -= 1
+                if self.config.tdma_total_slots < 2: #Whats the point if not at least 2?!
+                    self.config.tdma_total_slots = 2
+            elif self.display.row_index == 2:
+                self.config.tdma_slot -= 1
+                if self.config.tdma_slot < 0:
+                    self.config.tdma_slot = 0
+            elif self.display.row_index == 3:
+                self.config.tx_time -= 1
+                if self.config.tx_time < 1:
+                    self.config.tx_time = 1
+            elif self.display.row_index == 4:
+                self.config.tx_deadband -= 1
+                if self.config.tx_deadband < 1:
+                    self.config.tx_deadband = 1
         
     def key_right(self, channel):
         self.is_idle = False
@@ -191,6 +219,9 @@ class UI(Thread):
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
             self.display.col_index += 1
             if self.display.row_index == -1:
+                items = 3
+                if self.display.mode == m_REG:
+                    items = 2
                 if self.display.col_index > 3:
                     self.display.col_index = 3
             elif self.display.col_index > 20:
@@ -203,16 +234,25 @@ class UI(Thread):
             self.display.col_index += 1
             if self.display.col_index > 1:
                 self.display.col_index = 1
+        elif self.display.mode == m_SETTINGS:
+            if self.display.row_index == 1:
+                self.config.tdma_total_slots += 1
+            elif self.display.row_index == 2:
+                self.config.tdma_slot += 1
+            elif self.display.row_index == 3:
+                self.config.tx_time += 1
+            elif self.display.row_index == 4:
+                self.config.tx_deadband += 1
 
-    #self.display.dialog_msg = "Keyset Generated!"
-    #self.display.dialog_msg2 = "Test yubikey password"
-    #self.display.dialog_msg3 = "==[Press Yubikey]=="
-    #self.display.dialog_cmd = cmd_GEN_KEYSET 
-    #self.display.row_index = 0
-    #self.display.col_index = 0
-    #self.display.dialog_task_done = False
-    #self.display.dialog_next_mode = m_MAIN_MENU
-    #self.display.mode = m_DIALOG_TASK
+    #self.display.dialog_msg = "Main Dialog Msg"
+    #self.display.dialog_msg2 = "Line2"
+    #self.display.dialog_msg3 = "Line3"
+    #self.display.dialog_cmd = cmd_SOME_TASK_TO_PERFORM 
+    #self.display.row_index = 0 #Track Menu Item Selected
+    #self.display.col_index = 0 #Track Menu Item Selected
+    #self.display.dialog_task_done = False #Task Complete Flag
+    #self.display.mode = m_DIALOG_TASK #Next Mode to Enter
+    #self.display.dialog_next_mode = m_MAIN_MENU #Where to go after the next mode
                     
     def key_enter(self, channel):
         self.is_idle = False
@@ -224,35 +264,34 @@ class UI(Thread):
         elif self.display.mode == m_REG:
             if self.display.row_index >= 0:
                 index = (self.display.row_index * 21) + self.display.col_index
-                if len(self.config.alias) < 12:
-                    self.config.alias = self.config.alias + keyboard[index:index+1]
+                if self.display.reg_stage == 1:
+                    if len(self.message.alias) < 8:
+                        self.message.alias = self.message.alias + keyboard[index:index+1]
+                elif self.display.reg_stage == 2:
+                    if len(self.message.network_key) < 16:
+                        self.message.network_key = self.message.network_key + keyboard[index:index+1]
+                elif self.display.reg_stage == 3:
+                    if len(self.message.alias) < 16:
+                        self.message.group_key = self.message.group_key + keyboard[index:index+1]
+
             else:
-                if self.display.col_index == 0:
-                    self.display.dialog_msg = "Hello " + self.config.alias + "!"
-                    self.display.row_index = 0
-                    self.display.col_index = 0
-                    self.config.save_config(True)
-                    self.display.dialog_msg2 = "Generating Keyset"
-                    self.display.dialog_msg3 = "Please wait..."
-                    self.display.dialog_task_done = False
-                    self.display.dialog_next_mode = m_MAIN_MENU
-                    self.display.mode = m_DIALOG_TASK
-                    self.event.wait(0.5)
-                    password = self.crypto.generate_random_password(38)
-                    sig_pass =str(password)[:len(password)/2]
-                    crypt_pass = str(password)[len(password)/2:]
-                    if self.crypto.gen_keysets(crypt_pass,sig_pass,self.config.alias):
-                        #self.yubikey.set_slot1(password)
-                        self.display.dialog_msg = "Keyset Generated!"
-                        self.display.dialog_msg2 = "Test yubikey password"
-                        self.display.dialog_msg3 = "==[Press Yubikey]=="
-                        self.display.dialog_cmd = cmd_GEN_KEYSET
-                    else:
-                        self.display.dialog_msg = "Err: Gen Keysets"
-                        self.display.dialog_msg2 = "Keyset Already Exists"
-                        self.display.dialog_msg3 = "==[Press any key]=="
-                        self.display.mode = m_DIALOG
-                    password = "" # Unneccessary!?
+                if self.display.col_index == 0: # NEXT Field
+                    self.display.reg_stage += 1
+                    if self.display.reg_stage > 4:
+                        self.display.reg_stage = 1
+
+                elif self.display.col_index == 1: # DONE. Register node.
+                    if self.display.reg_stage == 4:
+                        self.display.row_index = 0
+                        self.display.col_index = 0
+                        self.display.dialog_task_done = False
+
+                        #Pad the keys. Not a great idea. Need to improve this for lazy people.
+                        #Key size has to be 16bytes
+                        self.message.alias = self.message.alias.ljust(8)
+                        self.message.network_key = self.message.network_key.ljust(16)
+                        self.message.group_key = self.message.group_key.ljust(16)
+                        self.display.mode = m_MAIN_MENU
 
         elif self.display.mode == m_COMPOSE:
             if self.display.row_index >= 0:
@@ -294,12 +333,10 @@ class UI(Thread):
                 self.display.mode = m_MSG_VIEWER
             elif self.display.row_index == 2:
                 self.display.mode = m_STATUS
-            elif self.display.row_index == 4:
-                self.display.dialog_cmd = cmd_SHUTDOWN
-                self.display.dialog_msg = "Shutdown?"
-                self.display.dialog_msg2 = "Are you not entertained?"
+            elif self.display.row_index == 3:
                 self.display.col_index = 0
-                self.display.mode = m_DIALOG_YESNO
+                self.display.row_index = 1
+                self.display.mode = m_SETTINGS
         elif self.display.mode == m_DIALOG_YESNO:
             if self.display.col_index == 1:
                 pass
@@ -318,8 +355,16 @@ class UI(Thread):
             self.display.mode = m_MAIN_MENU
         elif self.display.mode == m_COMPOSE:
             self.message.compose_msg = self.message.compose_msg[:-1]
+        elif self.display.mode == m_SETTINGS:
+            self.config.save_config(True)
+            self.main_menu();
         elif self.display.mode == m_REG:
-            self.config.alias = self.config.alias[:-1]
+            if self.display.reg_stage == 1:
+                self.message.alias = self.message.alias[:-1]
+            elif self.display.reg_stage == 2:
+                self.message.network_key = self.message.network_key[:-1]
+            elif self.display.reg_stage == 3:
+                self.message.group_key = self.message.group_key[:-1]
         else:
             self.display.row_index = 0
             self.display.col_index = 0

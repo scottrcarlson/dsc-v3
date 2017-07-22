@@ -82,6 +82,7 @@ if __name__ == "__main__":
     ui = UI(display,message, crypto, config)
     ui.start()
     ui.splash()
-
+    sleep(3)
+    ui.reg()
     while isRunning:
         sleep(1)

@@ -24,10 +24,12 @@ class Message(Thread):
 
         self.compose_msg = ""
 
-        self.alias = self.config.alias.ljust(8) # 8 Character Alias Limit
-
-        self.group_key="eatme12345678900"
-        self.network_key="eatme12345678901"
+        #self.alias = self.config.alias.ljust(8) # 8 Character Alias Limit
+        self.alias = ""
+        self.network_key=""
+        self.group_key=""
+        #self.network_key="eatme12345678901"
+        #self.group_key="eatme12345678900"
 
         self.network_plaintexts = []
         self.group_cleartexts = []
@@ -152,39 +154,40 @@ class Message(Thread):
     def process_packet(self, msg, rf_rssi, rf_snr):
         self.log.debug("Processing Network Message.. ") #RSSI/SNR: " + rf_rssi + "/" + rf_snr)
         #self.log.debug("key:" + self.network_key + " size:" + str(len(self.network_key)))
-
-        network_plaintext = self.crypto.decrypt(self.network_key, str(msg))
-        #self.log.debug("network plaintext:" + binascii.hexlify(network_plaintext))
-
-        if 'DSC3' in network_plaintext:
-
-            #self.log.debug("check: %s (%d)" % (binascii.hexlify(network_plaintext), len(network_plaintext)))
-            packet_sent_time = struct.unpack(">I",network_plaintext[:4])[0]  # unpack() always returns a tuple
-            packet_ttl = struct.unpack(">I",network_plaintext[4:8])[0]  # unpack() always returns a tuple
-            packet_mac = network_plaintext[8:12]
-            packet_spare = network_plaintext[12:16]
-            packet_group_cipher = network_plaintext[16:]
-            #self.log.debug("Packet MAC:    " + packet_mac)
-            #self.log.debug("Packet sent:   " + datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%Y-%m-%d %H:%M:%S"))
-            #self.log.debug("Packet TTL:    " +  str(packet_ttl) + " seconds")
-            #self.log.debug("Packet Spare: [" + packet_spare + "]")
-            if self.add_msg_to_repeat_list(msg):
-                self.log.debug("Decrypting Group Message")
-                group_cleartext = self.crypto.decrypt(self.group_key, packet_group_cipher)
-                if 'DSC3' in group_cleartext:
-                    packet_author = group_cleartext[:8].strip()
-                    packet_id = group_cleartext[8:12]
-                    packet_spare = group_cleartext[12:16]
-                    group_msg = group_cleartext[16:]
-                    #self.log.debug("Packet Author: " + packet_author)
-                    #self.log.debug("Packet ID:     " + packet_id)
-                    #self.log.debug("Packet Spare: [" + packet_spare + "]")
-                    #self.log.debug("Group Msg:     " + group_msg)
-                    if network_plaintext not in self.network_plaintexts:
-                        self.network_plaintexts.append(network_plaintext)
-                        self.process_group_messages()
-        else:
-            self.log.debug("Packet Dropped due to missing MAC")
+        try:
+            network_plaintext = self.crypto.decrypt(self.network_key, str(msg))
+        except:
+            self.log.debug("Failed to decrypt packet.")
+        else:        
+            #self.log.debug("network plaintext:" + binascii.hexlify(network_plaintext))
+            if 'DSC3' in network_plaintext:
+                #self.log.debug("check: %s (%d)" % (binascii.hexlify(network_plaintext), len(network_plaintext)))
+                packet_sent_time = struct.unpack(">I",network_plaintext[:4])[0]  # unpack() always returns a tuple
+                packet_ttl = struct.unpack(">I",network_plaintext[4:8])[0]  # unpack() always returns a tuple
+                packet_mac = network_plaintext[8:12]
+                packet_spare = network_plaintext[12:16]
+                packet_group_cipher = network_plaintext[16:]
+                #self.log.debug("Packet MAC:    " + packet_mac)
+                #self.log.debug("Packet sent:   " + datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%Y-%m-%d %H:%M:%S"))
+                #self.log.debug("Packet TTL:    " +  str(packet_ttl) + " seconds")
+                #self.log.debug("Packet Spare: [" + packet_spare + "]")
+                if self.add_msg_to_repeat_list(msg):
+                    self.log.debug("Decrypting Group Message")
+                    group_cleartext = self.crypto.decrypt(self.group_key, packet_group_cipher)
+                    if 'DSC3' in group_cleartext:
+                        packet_author = group_cleartext[:8].strip()
+                        packet_id = group_cleartext[8:12]
+                        packet_spare = group_cleartext[12:16]
+                        group_msg = group_cleartext[16:]
+                        #self.log.debug("Packet Author: " + packet_author)
+                        #self.log.debug("Packet ID:     " + packet_id)
+                        #self.log.debug("Packet Spare: [" + packet_spare + "]")
+                        #self.log.debug("Group Msg:     " + group_msg)
+                        if network_plaintext not in self.network_plaintexts:
+                            self.network_plaintexts.append(network_plaintext)
+                            self.process_group_messages()
+            else:
+                self.log.debug("Packet Dropped due to missing MAC")
 
     def process_group_messages(self):
         self.log.debug("Processing Group Messaeg")
@@ -199,11 +202,11 @@ class Message(Thread):
             group_msg = group_cleartext[16:]
             age_sec = time.time() - packet_sent_time
             if age_sec < 60:
-                age_min = "<1"
+                time_since = "now|"
             else:
-                age_min = age_sec / 60
+                time_since = str(int(age_sec / 60)) + "m|"
             #self.group_cleartexts.append(datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%m-%d %H:%M"))
-            self.group_cleartexts.append(packet_author + '|' + str(age_min) + 'm|' + group_msg)
+            self.group_cleartexts.append(packet_author + '|' + time_since + group_msg)
         """
         self.log.debug("----------------- Beacon ------------------")
         self.log.debug( "Beacon Recv'd [" + friend + '] RSSI/SNR:[' + rf_rssi + ']/[' + rf_snr + ']')

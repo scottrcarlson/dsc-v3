@@ -19,6 +19,7 @@ m_MAIN_MENU = 6
 m_COMPOSE = 5
 m_SPLASH = 2
 m_MSG_VIEWER = 8
+m_SETTINGS = 1
 
 m_SPARE3 = 3
 m_COMPOSE_MENU = 4
@@ -61,6 +62,12 @@ class Display(Thread):
         self.dialog_cmd = 0
         self.dialog_task_done = False
         self.dialog_next_mode = m_MAIN_MENU
+
+        self.cursor = True
+        self.cursor_x = 0
+        self.cursor_y = 0
+
+        self.reg_stage = 1   #WNode Registration Stage. 1/Name,2/NetKey,3/GrpKey
         self.log.info("Initialized Display Thread.")
 
     def run(self):
@@ -89,6 +96,29 @@ class Display(Thread):
                     draw.line((124,63,127,60), fill=255)
 
                     draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+            #------[SETTINGS SCREEN]------------------------------------------------------------------$     
+            elif self.mode == m_SETTINGS:
+               with canvas(self.device) as draw:
+                    draw.text((0, 0), "----- TDMA Settings -----", font=self.font, fill=255)
+                    draw.text((0, 10), "Total Nodes:" + str(self.config.tdma_total_slots), font=self.font, fill=255)
+                    draw.text((0, 20), "TDMA Slot(0-n):" + str(self.config.tdma_slot), font=self.font, fill=255)
+                    draw.text((0, 30), "TX Time(s):" + str(self.config.tx_time), font=self.font, fill=255)
+                    draw.text((0, 40), "Deadband(s):" + str(self.config.tx_deadband), font=self.font, fill=255)
+                    if self.row_index == 1:
+                        self.cursor_y = 10
+                        self.cursor_x = 12 * 6
+                    elif self.row_index == 2:
+                        self.cursor_y = 20
+                        self.cursor_x = 15 * 6
+                    elif self.row_index == 3:
+                        self.cursor_y = 30
+                        self.cursor_x = 11 * 6
+                    elif self.row_index == 4:
+                        self.cursor_y = 40
+                        self.cursor_x = 12 * 6
+                    if self.cursor:
+                        draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
+                    self.cursor = not self.cursor
             #------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS:
                 with canvas(self.device) as draw:
@@ -243,17 +273,47 @@ class Display(Thread):
                 self.row = 51 + (self.row_index * self.row_height)
                 self.col = self.char_space * self.col_index
                 with canvas(self.device) as draw:
-                    draw.text((0, 0), self.config.alias, font=self.font, fill=255)
+                    draw.text((0, 0), "Name:", font=self.font, fill=255)
+                    draw.text((0, 8), "NetK:", font=self.font, fill=255)
+                    draw.text((0, 16), "GrpK:", font=self.font, fill=255)
+                    draw.text((30, 0), self.message.alias, font=self.font, fill=255)
+                    draw.text((30, 8), self.message.network_key, font=self.font, fill=255)
+                    draw.text((30, 16), self.message.group_key, font=self.font, fill=255)
+                    if self.reg_stage == 1:
+                        self.cursor_y = 0
+                        self.cursor_x = (len(self.message.alias) * 6) + 30
+                    elif self.reg_stage == 2:
+                        self.cursor_y = 8
+                        self.cursor_x = (len(self.message.network_key) * 6) + 30
+                    elif self.reg_stage == 3:
+                        self.cursor_y = 16
+                        self.cursor_x = (len(self.message.group_key) * 6) + 30
+
+                    if self.cursor and self.reg_stage != 4:
+                        draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
+                    self.cursor = not self.cursor
+
                     draw.line((0, 39, 127, 39), fill=255)
                     draw.text((0, 40), keyboard[:21], font=self.font, fill=255)
                     draw.text((0, 52), keyboard[21:], font=self.font, fill=255)
+
                     if self.row_index >= 0:
-                        draw.text((0, 28), ' DONE ', font=self.font, fill=255)
+                        if self.reg_stage == 4:
+                            draw.text((20, 28), ' NEXT   DONE ', font=self.font, fill=255)
+                        else:
+                            draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
                         draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
                     else:
                         if self.col_index == 0:
-                            draw.text((0, 28), '<DONE>', font=self.font, fill=255)
-
+                            if self.reg_stage == 4:
+                                draw.text((20, 28), '<NEXT>  DONE ', font=self.font, fill=255)
+                            else:
+                                draw.text((20, 28), '<NEXT>', font=self.font, fill=255)
+                        elif self.col_index == 1:
+                            if self.reg_stage == 4:
+                                draw.text((20, 28), ' NEXT  <DONE>', font=self.font, fill=255)
+                            else:
+                                draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
             self.event.wait(0.04)
 
         with canvas(self.device) as draw:
