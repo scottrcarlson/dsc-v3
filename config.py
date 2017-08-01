@@ -15,6 +15,7 @@ class Config(object):
         self.tdma_total_slots = 2
         self.tx_time = 4
         self.tx_deadband = 1
+        self.hw_rev = 1
         self.cfg = ConfigParser.ConfigParser()
         try:
             os.makedirs(CONFIG_PATH)
@@ -35,6 +36,7 @@ class Config(object):
             if not is_exist:
                 print "Generating config file."
                 self.cfg.add_section('Network')
+            self.cfg.set('Network','Hardware_Rev',self.hw_rev)
             self.cfg.set('Network','TDMA_Slot',self.tdma_slot)
             self.cfg.set('Network','TDMA_Total_Slots',self.tdma_total_slots)
             self.cfg.set('Network','TX_Time',self.tx_time)
@@ -43,6 +45,7 @@ class Config(object):
 
     def load_config(self):
         self.cfg.read(CONFIG_PATH + '/' + CONFIG_FILE)
+        self.hw_rev = self.cfg.getint("Network","Hardware_Rev")
         self.tdma_slot = self.cfg.getint("Network","TDMA_Slot")
         self.tdma_total_slots = self.cfg.getint("Network","TDMA_Total_Slots")
         self.tx_time = self.cfg.getint("Network","TX_Time")

@@ -16,12 +16,13 @@ import logging
 
 
 class Radio(Thread):
-    def __init__(self,serial_device, config, message):
+    def __init__(self,serial_device, config, message, heartbeat):
         Thread.__init__(self)
         self.event = Event()
-        self.log = logging.getLogger(self.__class__.__name__)
-        
-        self.log.setLevel(logging.INFO)
+        self.log = logging.getLogger()
+
+        self.heartbeat = heartbeat
+        #self.log.setLevel(logging.DEBUG)
 
         self.serial_device = serial_device
         self.config = config
@@ -30,6 +31,11 @@ class Radio(Thread):
         self.ignore_radio_irq = False
         self.radio_verbose = 0
 
+        self.freq = 902
+        self.bandwidth = 0
+        self.spread_factor = 0
+        self.coding_rate = 0
+        
         self.sync_word = 'helloworld'
 
         self.total_recv = 0
@@ -39,7 +45,7 @@ class Radio(Thread):
         self.prev_total_recv = 0
         self.prev_total_exceptions = 0
 
-        self.last_tx = time.time()
+        self.last_tx = 0
         self.tx_throttle = 1 # Should we calculate based on rf parameters and packet size? YES
         self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
         self.tdma_frame = self.tdma_slot_width * self.config.tdma_total_slots
@@ -54,46 +60,74 @@ class Radio(Thread):
 
         self.log.info('Initialized Radio Thread.')
         self.log.debug("Radio Antenna Active:" + self.mc.get_antenna())
+        #params = self.mc._send_command(OPCODES['GET_RADIO_PARAMS'])
+        #print type(params)
+        #for i in range(0, len(params)):
+        #    print "Byte(",i,"): ", params[i]
+        
+        #print int(params[7])
 
     def run(self):
         self.event.wait(1)
-        last_checked_tdma = time.time()
+        last_checked_tdma = 0
+        heartbeat_time = 0
         transmit_ok = False
         while not self.event.is_set():
+            try:
+                if time.time() - heartbeat_time > 5:
+                    heartbeat_time = time.time()
+                    if self.heartbeat.qsize() == 0:
+                        self.heartbeat.put_nowait("hb")
+                elif time.time() - heartbeat_time < 0:
+                    self.log.warn("Time changed to past. Re-initializing.")
+                    heartbeat_time = time.time()
+            except:
+                self.log.error("What time is it?")
             self.event.wait(0.05)
-            if self.is_check_inbound and not transmit_ok:# and not is_check_outbound:
-                self.process_inbound_msg()
-            elif transmit_ok and (time.time() - self.last_tx) > self.tx_throttle:
-                self.last_tx = time.time()
-                self.process_outbound_msg()
 
-            #if self.total_sent != self.prev_total_sent or self.total_recv != self.prev_total_recv or self.total_exceptions != self.prev_total_exceptions:
-            #    self.prev_total_sent = self.total_sent
-            #    self.prev_total_recv = self.total_recv
-            #    self.prev_total_exceptions = self.total_exceptions
-                #print "== Sent: [",self.total_sent,"]  Recvd:[",self.total_recv,"] Radio Exceptions:[",self.total_exceptions,"] =="
+            try:
+                if self.message.node_registered:
+                    if self.is_check_inbound and not transmit_ok:# and not is_check_outbound:
+                        self.process_inbound_msg()
+                    elif transmit_ok and (time.time() - self.last_tx) > self.tx_throttle:
+                        self.last_tx = time.time()
+                        self.process_outbound_msg()
+                    if time.time() - self.last_tx < 0:
+                        self.log.warn("Time changed to past. Re-initializing.")
+                        self.last_tx = time.time()
 
-            if (time.time() - last_checked_tdma) > 0.5: #Check to see if our TDMA Slot is Active
-                last_checked_tdma = time.time()
-                epoch = time.time()
-                tdma_frames_since_epoch = int(epoch / self.tdma_frame)
+                    #if self.total_sent != self.prev_total_sent or self.total_recv != self.prev_total_recv or self.total_exceptions != self.prev_total_exceptions:
+                    #    self.prev_total_sent = self.total_sent
+                    #    self.prev_total_recv = self.total_recv
+                    #    self.prev_total_exceptions = self.total_exceptions
+                        #print "== Sent: [",self.total_sent,"]  Recvd:[",self.total_recv,"] Radio Exceptions:[",self.total_exceptions,"] =="
 
-                slot_start = (self.config.tdma_slot * self.tdma_slot_width) + (self.tdma_frame * tdma_frames_since_epoch)
-                slot_end = slot_start + self.tdma_slot_width
+                    if (time.time() - last_checked_tdma) > 0.25: #Check to see if our TDMA Slot is Active
+                        last_checked_tdma = time.time()
+                        epoch = time.time()
+                        tdma_frames_since_epoch = int(epoch / self.tdma_frame)
 
-                if (epoch > slot_start and epoch < (slot_end - self.config.tx_deadband)):
-                    self.message.is_radio_tx = True
-                    if not transmit_ok:
-                        #self.message.generate_beacon()
-                        self.log.debug("[TX mode] TDMA Slot Active")
-                        #print "[TX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
-                    transmit_ok = True
-                else:
-                    self.message.is_radio_tx = False
-                    if transmit_ok:
-                        self.log.debug("[RX mode] Listening")
-                        #print "[RX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
-                    transmit_ok = False
+                        slot_start = (self.config.tdma_slot * self.tdma_slot_width) + (self.tdma_frame * tdma_frames_since_epoch)
+                        slot_end = slot_start + self.tdma_slot_width
+
+                        if (epoch > slot_start and epoch < (slot_end - self.config.tx_deadband)):
+                            self.message.is_radio_tx = True
+                            if not transmit_ok:
+                                self.message.generate_beacon()
+                                self.log.debug("[TX mode] TDMA Slot Active")
+                                #print "[TX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
+                            transmit_ok = True
+                        else:
+                            self.message.is_radio_tx = False
+                            if transmit_ok:
+                                self.log.debug("[RX mode] Listening")
+                                #print "[RX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
+                            transmit_ok = False
+                    elif time.time() - last_checked_tdma < 0:
+                        self.log.warn("Time changed to past. Re-initializing.")
+                        last_checked_tdma = time.time()
+            except Exception as e:
+                self.log.error("Radio Run Task Error: " + str(e))
 
     def stop(self):
         self.log.debug("Stopping Radio Thread.")
@@ -132,7 +166,8 @@ class Radio(Thread):
                 (rssi, ) = struct.unpack_from('<h', bytes(received_data[:2]))
                 snr = received_data[2] / 4.0
 
-                self.message.radio_inbound_queue.put_nowait(msg)
+                if self.message.node_registered:
+                    self.message.radio_inbound_queue.put_nowait((rssi,snr,msg))
                 sleep(0.15)
 
         finally:
@@ -149,21 +184,20 @@ class Radio(Thread):
 
     def process_outbound_msg(self):
         outbound_data = ''
-        #try:
-        #    outbound_data = self.message.radio_beacon_queue.get_nowait()
-        #except Queue.Empty:
         try:
-            outbound_data = self.message.radio_outbound_queue.get_nowait()
-
-            self.tx_throttle = ((1.0 / 510.0) * len(outbound_data)) + 0.2 #Scale found empiracaly (ie. no radio errors)
-            self.log.debug(str(len(outbound_data)) + " bytes/tx_throttle=" + str(self.tx_throttle))
+            outbound_data = self.message.radio_beacon_queue.get_nowait()
+            self.log.debug("Sending Beacon: " + str(self.message.radio_beacon_queue.qsize()))
         except Queue.Empty:
-            pass
+            try:
+                outbound_data = self.message.radio_outbound_queue.get_nowait()
+                self.tx_throttle = ((1.0 / 510.0) * len(outbound_data)) + 0.3 #Scale found empiracaly (ie. no radio errors)
+                #self.log.debug(str(len(outbound_data)) + " bytes/tx_throttle=" + str(self.tx_throttle))
+            except Queue.Empty:
+                pass
         if outbound_data != '':
             self.is_check_outbound = True
             try:
                 r = self.mc._send_command(OPCODES['PKT_SEND_QUEUE'], outbound_data)
-                #sleep(0.015)
                 sleep(0.025)
                 self.is_check_outbound = False
 
@@ -190,8 +224,6 @@ class Radio(Thread):
                 self.total_exceptions += 1
 
             else:
-                #self.log.debug("IRQ FIRED: ", irq_flags)
-
                 if "RX_DONE" in irq_flags:
                     self.is_check_inbound = True
 
@@ -225,11 +257,9 @@ class Radio(Thread):
                 self.log.error("EXCEPTION PKT_RECV_CONT: ", exc_info=True)
         else:
             pass
-            #self.log.debug("Radio in Recv Mode")
         sleep(0.01)
         try:
             self.mc.clear_irq_flags()
-
         except Exception, e:
             if self.radio_verbose > 0:
                 self.log.error("EXCEPTION: CLEAR_IRQ_FLAGS: ", exc_info=True)

@@ -13,36 +13,49 @@ import screen as scr
 import time
 import logging
 
+
 #DISPLAY MODES
 m_IDLE = 0
-m_MAIN_MENU = 6
-m_COMPOSE = 5
-m_SPLASH = 2
-m_MSG_VIEWER = 8
 m_SETTINGS = 1
-
-m_SPARE3 = 3
+m_SPLASH = 2
+m_LOG_VIEWER = 3
 m_COMPOSE_MENU = 4
+m_COMPOSE = 5
+m_MAIN_MENU = 6
 m_DIALOG = 7
+m_MSG_VIEWER = 8
 m_DIALOG_YESNO = 9
 m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
+m_RF_TUNING = 14
 #m_STATUS_LASTSEEN = 14
 
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
 class Display(Thread):
-    def __init__(self, message, version, config):
+    def __init__(self, message, version, config, radio, sw_rev, heartbeat):
         Thread.__init__(self)
         self.event = Event()
-        self.log = logging.getLogger(self.__class__.__name__)
-        self.reset()
+        self.log = logging.getLogger()
+
+        self.heartbeat = heartbeat
+        
+        if sw_rev == 1:
+            self.reset() #Needed for V2
+
         self.config = config
         self.version = version
+        self.sw_rev = sw_rev
         self.message = message
+        self.radio = radio
+
     	# TODO: gracefully handle exception when OLED absent
-        self.device = sh1106(port=1, address=0x3C)
+        if self.config.hw_rev == 1:
+            self.device = sh1106(port=1, address=0x3C)
+        else:
+            #self.device = Adafruit_SSD1306.SSD1306_128_64(rst=24)
+            self.device = ssd1306(port=1, address=0x3C)
         self.font = ImageFont.load_default()
         self.mode = m_IDLE
 
@@ -66,13 +79,48 @@ class Display(Thread):
         self.cursor = True
         self.cursor_x = 0
         self.cursor_y = 0
+        self.key_repeating = False
+
+        self.log_tail_results = []
 
         self.reg_stage = 1   #WNode Registration Stage. 1/Name,2/NetKey,3/GrpKey
         self.log.info("Initialized Display Thread.")
 
+    def log_tail(self,f, n):
+        assert n >= 0
+        pos, lines = n+1, []
+        while len(lines) <= n:
+            try:
+                f.seek(-pos, 2)
+            except IOError:
+                f.seek(0)
+                break
+            finally:
+                lines = list(f)
+            pos *= 2
+        stripped_lines = []
+
+        for line in lines[-n:]:
+            split_line = line.split("|")
+            stripped_lines.append(split_line[3].strip())
+        return stripped_lines
+
     def run(self):
         self.event.wait(1)
+        
+        heartbeat_time = 0
+        log_time = 0
         while not self.event.is_set():
+            try:
+                if time.time() - heartbeat_time > 5:
+                    heartbeat_time = time.time()
+                    if self.heartbeat.qsize() == 0:
+                        self.heartbeat.put_nowait("hb")
+                elif time.time() - heartbeat_time < 0:
+                    self.log.warn("Time changed to past. Re-initializing.")
+                    heartbeat_time = time.time()
+            except:
+                self.log.error("What time is it?")
             #------[IDLE]--------------------------------------------------------------------------
             if self.mode == m_IDLE:
                 with canvas(self.device) as draw:
@@ -84,86 +132,116 @@ class Display(Thread):
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
-          #------[MAIN MENU]----------------------------------------------------------------------
+            #------[LOG VIEWER]------------------------------------------------------------------$
+            elif self.mode == m_LOG_VIEWER:
+                try:
+                    if time.time() - log_time > 1:
+                        with open('/dscdata/dsc.log','r') as logfile:
+                            self.log_tail_results = self.log_tail(logfile, 6)
+                    log_tail_results = self.log_tail_results
+                    with canvas(self.device) as draw:
+                        for i in range(0,6):
+                            draw.text((0, i*10), log_tail_results[i], font=self.font, fill=255)
+                except:
+                    self.log.error("m_LOG_VIEWER Exception")
+                
+            #------[MAIN MENU]----------------------------------------------------------------------
             elif self.mode == m_MAIN_MENU:
-                with canvas(self.device) as draw:
-                    draw.line((121,3,124,0), fill=255)
-                    draw.line((124,0,127,3), fill=255)
-                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    for i in range(0,len(scr.main_menu)):
-                        draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
-                    draw.line((121,60,124,63), fill=255)
-                    draw.line((124,63,127,60), fill=255)
+                try:
+                    with canvas(self.device) as draw:
+                        draw.line((121,3,124,0), fill=255)
+                        draw.line((124,0,127,3), fill=255)
+                        #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                        for i in range(0,len(scr.main_menu)):
+                            draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
+                        draw.line((121,60,124,63), fill=255)
+                        draw.line((124,63,127,60), fill=255)
 
-                    draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                        draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                except:
+                    self.log.error("m_MAIN_MENU Exception")
             #------[SETTINGS SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_SETTINGS:
-               with canvas(self.device) as draw:
-                    draw.text((0, 0), "----- TDMA Settings -----", font=self.font, fill=255)
-                    draw.text((0, 10), "Total Nodes:" + str(self.config.tdma_total_slots), font=self.font, fill=255)
-                    draw.text((0, 20), "TDMA Slot(0-n):" + str(self.config.tdma_slot), font=self.font, fill=255)
-                    draw.text((0, 30), "TX Time(s):" + str(self.config.tx_time), font=self.font, fill=255)
-                    draw.text((0, 40), "Deadband(s):" + str(self.config.tx_deadband), font=self.font, fill=255)
-                    if self.row_index == 1:
-                        self.cursor_y = 10
-                        self.cursor_x = 12 * 6
-                    elif self.row_index == 2:
-                        self.cursor_y = 20
-                        self.cursor_x = 15 * 6
-                    elif self.row_index == 3:
-                        self.cursor_y = 30
-                        self.cursor_x = 11 * 6
-                    elif self.row_index == 4:
-                        self.cursor_y = 40
-                        self.cursor_x = 12 * 6
-                    if self.cursor:
-                        draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
-                    self.cursor = not self.cursor
+                try:
+                    with canvas(self.device) as draw:
+                        draw.text((0, 0), "-- Network Settings --", font=self.font, fill=255)
+                        draw.text((0, 10), "Total Nodes:" + str(self.config.tdma_total_slots), font=self.font, fill=255)
+                        draw.text((0, 20), "TDMA Slot(0-n):" + str(self.config.tdma_slot), font=self.font, fill=255)
+                        draw.text((0, 30), "TX Time(s):" + str(self.config.tx_time), font=self.font, fill=255)
+                        draw.text((0, 40), "Deadband(s):" + str(self.config.tx_deadband), font=self.font, fill=255)
+                        draw.text((0, 50), "Packet TTL(s):" + str(self.message.packet_ttl), font=self.font, fill=255)
+                        if self.row_index == 1:
+                            self.cursor_y = 10
+                            self.cursor_x = 12 * 6
+                        elif self.row_index == 2:
+                            self.cursor_y = 20
+                            self.cursor_x = 15 * 6
+                        elif self.row_index == 3:
+                            self.cursor_y = 30
+                            self.cursor_x = 11 * 6
+                        elif self.row_index == 4:
+                            self.cursor_y = 40
+                            self.cursor_x = 12 * 6
+                        if self.cursor:
+                            draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
+                        self.cursor = not self.cursor
+                except:
+                    self.log.error("m_SETTINGS Exception")
+             #------[RF TUNING SCREEN]------------------------------------------------------------------$     
+            elif self.mode == m_RF_TUNING:
+                try:
+                    with canvas(self.device) as draw:
+                        #draw.text((0, 0), "----- RF Settings -----", font=self.font, fill=255)
+                        draw.text((0, 0), "Freq:" + str(self.radio.freq), font=self.font, fill=255)
+                        draw.text((0, 10), "Bandwidth:" + str(self.radio.bandwidth), font=self.font, fill=255)
+                        draw.text((0, 20), "Spread Factor:" + str(self.radio.spread_factor), font=self.font, fill=255)
+                        draw.text((0, 30), "Coding Rate:" + str(self.radio.coding_rate), font=self.font, fill=255)
+                        draw.text((0, 40), "TX Power:" + str(self.radio.tx_power), font=self.font, fill=255)
+                        if self.row_index == 1:
+                            self.cursor_y = 0
+                            self.cursor_x = 5 * 6
+                        elif self.row_index == 2:
+                            self.cursor_y = 10
+                            self.cursor_x = 10 * 6
+                        elif self.row_index == 3:
+                            self.cursor_y = 20
+                            self.cursor_x = 13 * 6
+                        elif self.row_index == 4:
+                            self.cursor_y = 30
+                            self.cursor_x = 11 * 6
+                        elif self.row_index == 5:
+                            self.cursor_y = 40
+                            self.cursor_x = 9 * 6
+                        if self.cursor:
+                            draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
+                        self.cursor = not self.cursor
+                except:
+                    self.log.error("m_RF_TUNING Exception")
             #------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS:
-                with canvas(self.device) as draw:
-                    logo = Image.open('/home/pi/dsc.png')
-                    draw.bitmap((0, 0), logo, fill=1)
-                    #draw.text((105, 52), 'SYNC', font=self.font, fill=255)
-                    current_datetime = time.strftime("%H:%M:%S")
-                    draw.text((0, 30), current_datetime, font=self.font, fill=255)
-                    #draw.text((0, 52), self.version, font=self.font, fill=255)
+                try:
+                    with canvas(self.device) as draw:
+                        current_datetime = time.strftime("%H:%M:%S")
+                        radio_mode = ''
+                        if self.message.is_radio_tx:
+                            radio_mode = 'TX'
+                        else:
+                            radio_mode = 'RX'
+                        draw.text((0, 0), radio_mode + " / " + current_datetime, font=self.font, fill=255)
 
-                    #if self.message.stats_max_repeat_size != 0:
-                    #    progress_bar = (len(self.message.repeat_msg_list) / float(self.message.stats_max_repeat_size)) * 127
-                    #else:
-                    progress_bar = 0
-
-                    draw.rectangle((0, 42, 127, 49), outline=255, fill=0)
-                    draw.rectangle((0, 42, int(progress_bar), 49), fill=255)
-                    #draw.text((0, 52), '%d/%d'%(len(self.message.repeat_msg_list),self.message.stats_max_repeat_size), font=self.font, fill=255)
-
-                    radio_mode = ''
-                    if self.message.is_radio_tx:
-                        radio_mode = 'TX'
-                    else:
-                        radio_mode = 'RX'
-
-                    #if self.message.quiet_mode:
-                    #    draw.text((35, 52), ' [' + radio_mode + '] net quiet', font=self.font, fill=255)
-                    #elif self.message.network_equal:
-                    #    draw.text((35, 52), '    [' + radio_mode + '] net eq', font=self.font, fill=255)
-                    #else:
-                    #    draw.text((35, 52), '[' + radio_mode + '] net not eq', font=self.font, fill=255)
-                    #draw.text((0, 55), '[0] msgs unread', font=self.font, fill=255)
-            #------[STATUS SCREEN]------------------------------------------------------------------$
-            #elif self.mode == m_STATUS_LASTSEEN:
-            #        with canvas(self.device) as draw:
-            #            logo = Image.open('/home/pi/dsc.png')
-            #            draw.bitmap((0, 0), logo, fill=1)
-            #            #draw.text((0, 30), 'Beacon Recvd: ' + self.message.lastseen_name, font=self.font, fill=255)
-            #            draw.text((0, 40), 'RSSI/SNR: [' + str(self.message.lastseen_rssi) +'][' + str(self.message.lastseen_snr) + ']', font=self.font, fill=255)
-            #            if self.message.lastseen_time == 0:
-            #                draw.text((0, 50), 'Never seen.', font=self.font, fill=255)
-            #            else:
-            #                draw.text((0, 50), str( round((time.time() - self.message.lastseen_time) / 60.0,1) ) + ' minutes ago', font=self.font, fill=255)
-
-        #draw.text((0, 55), '[0] msgs unread', font=self.font, fill=255)
+                        row = 1
+                        for alias in self.message.recvd_beacons:
+                            time_sent,rssi,snr = self.message.recvd_beacons[alias]
+                            age_sec = time.time() - time_sent
+                            time_since = ""
+                            if age_sec < 60:
+                                time_since = "now"
+                            else:
+                                time_since = str(int(age_sec / 60)) + "m"
+                            draw.text((0, 10 * row), alias +"|"+ time_since +"|"+str(rssi)+"|"+str(snr), font=self.font, fill=255)
+                            row += 1
+                except:
+                    self.log.error("m_STATUS Exception") #LOG Exceptions here
             #------[DIALOG]-------------------------------------------------------------------    $
             elif self.mode == m_DIALOG:
                 if self.dialog_confirmed:
@@ -200,120 +278,138 @@ class Display(Thread):
                         draw.text((30, 40), ' NO     <YES> ', font=self.font, fill=255)
            #------[MSG COMPOSE MENU]-------
             elif self.mode == m_COMPOSE_MENU:
-                with canvas(self.device) as draw:
-                    draw.line((121,3,124,0), fill=255)
-                    draw.line((124,0,127,3), fill=255)
-                    if (self.row_index < self.viz_min):
-                        self.viz_max -= self.viz_min - self.row_index
-                        self.viz_min = self.row_index
-                    if (self.row_index >= self.viz_max):
-                        self.viz_max = self.row_index + 1
-                        self.viz_min = self.viz_max - self.screen_row_size
-                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                    if len(scr.compose_menu) < self.viz_max:
-                        max = len(scr.compose_menu)
-                    else:
-                        max = self.viz_max
+                try:
+                    with canvas(self.device) as draw:
+                        draw.line((121,3,124,0), fill=255)
+                        draw.line((124,0,127,3), fill=255)
+                        if (self.row_index < self.viz_min):
+                            self.viz_max -= self.viz_min - self.row_index
+                            self.viz_min = self.row_index
+                        if (self.row_index >= self.viz_max):
+                            self.viz_max = self.row_index + 1
+                            self.viz_min = self.viz_max - self.screen_row_size
+                        #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                        if len(scr.compose_menu) < self.viz_max:
+                            max = len(scr.compose_menu)
+                        else:
+                            max = self.viz_max
 
-                    for i in range(self.viz_min,max):
-                        draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.compose_menu[i], font=self.font, fill=255)
-                    draw.line((121,60,124,63), fill=255)
-                    draw.line((124,63,127,60), fill=255)
-                    draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
-
+                        for i in range(self.viz_min,max):
+                            draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.compose_menu[i], font=self.font, fill=255)
+                        draw.line((121,60,124,63), fill=255)
+                        draw.line((124,63,127,60), fill=255)
+                        draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                except:
+                    self.log.error("m_COMPOSE_MENU Exception")
             #------[MSG THREAD VIEWER]-------
             elif self.mode == m_MSG_VIEWER:
-                with canvas(self.device) as draw:
-                    draw.line((121,3,124,0), fill=255)
-                    draw.line((124,0,127,3), fill=255)
-                    if (self.row_index < self.viz_min):
-                        self.viz_max -= self.viz_min - self.row_index
-                        self.viz_min = self.row_index
-                    if (self.row_index >= self.viz_max):
-                        self.viz_max = self.row_index + 1
-                        self.viz_min = self.viz_max - self.screen_row_size
-                    #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                try:
+                    with canvas(self.device) as draw:
+                        draw.line((121,3,124,0), fill=255)
+                        draw.line((124,0,127,3), fill=255)
+                        if (self.row_index < self.viz_min):
+                            self.viz_max -= self.viz_min - self.row_index
+                            self.viz_min = self.row_index
+                        if (self.row_index >= self.viz_max):
+                            self.viz_max = self.row_index + 1
+                            self.viz_min = self.viz_max - self.screen_row_size
+                        #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                        group_cleartexts = self.message.group_cleartexts # Make a copy so another thread can't cause issues.
+                        if len(group_cleartexts) < self.viz_max:
+                            max = len(group_cleartexts)
+                        else:
+                            max = self.viz_max
+                        for i in range(self.viz_min,max):
+                            draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), group_cleartexts[i], font=self.font, fill=255)
+                        #else:
+                            #draw.text((0, 0),"No Messages", font=self.font, fill=255)
 
-                    if len(self.message.group_cleartexts) < self.viz_max:
-                        max = len(self.message.group_cleartexts)
-                    else:
-                        max = self.viz_max
-                    for i in range(self.viz_min,max):
-                        draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), self.message.group_cleartexts[i], font=self.font, fill=255)
-                    #else:
-                        #draw.text((0, 0),"No Messages", font=self.font, fill=255)
+                        draw.line((121,60,124,63), fill=255)
+                        draw.line((124,63,127,60), fill=255)
 
-                    draw.line((121,60,124,63), fill=255)
-                    draw.line((124,63,127,60), fill=255)
-
-                    #draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                        #draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                except:
+                    self.log.error("m_MSG_VIEWER Exception")
           #------[COMPOSE MSG]----------------------------------------------------------------
             elif self.mode == m_COMPOSE:
-                self.row = 51 + (self.row_index * self.row_height)
-                self.col = self.char_space * self.col_index
-                with canvas(self.device) as draw:
-                    draw.text((0, 0), self.message.compose_msg, font=self.font, fill=255)
-                    draw.line((0, 39, 127, 39), fill=255)
-                    draw.text((0, 40), keyboard[:21], font=self.font, fill=255)
-                    draw.text((0, 52), keyboard[21:], font=self.font, fill=255)
-                    if self.row_index >= 0:
-                        draw.text((0, 28), ' SND  SPC  CLR  BAIL ', font=self.font, fill=255)
-                        draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
-                    else:
-                        if self.col_index == 0:
-                            draw.text((0, 28), '<SND> SPC  CLR  BAIL ', font=self.font, fill=255)
-                        elif self.col_index == 1:
-                            draw.text((0, 28), ' SND <SPC> CLR  BAIL ', font=self.font, fill=255)
-                        elif self.col_index == 2:
-                            draw.text((0, 28), ' SND  SPC <CLR> BAIL ', font=self.font, fill=255)
-                        elif self.col_index == 3:
-                            draw.text((0, 28), ' SND  SPC  CLR <BAIL>' , font=self.font, fill=255)
+                try:
+                    self.row = 51 + (self.row_index * self.row_height)
+                    self.col = self.char_space * self.col_index
+                    with canvas(self.device) as draw:
+                        draw.text((0, 0), self.message.compose_msg, font=self.font, fill=255)
+                        draw.line((0, 39, 127, 39), fill=255)
+                        draw.text((0, 40), keyboard[:21], font=self.font, fill=255)
+                        draw.text((0, 52), keyboard[21:], font=self.font, fill=255)
+                        if self.row_index >= 0:
+                            draw.text((0, 28), ' SND  SPC  CLR  BAIL ', font=self.font, fill=255)
+                            if self.key_repeating:
+                                self.cursor = True
+                            if self.cursor:
+                                draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
+                            self.cursor = not self.cursor
+                        else:
+                            if self.col_index == 0:
+                                draw.text((0, 28), '<SND> SPC  CLR  BAIL ', font=self.font, fill=255)
+                            elif self.col_index == 1:
+                                draw.text((0, 28), ' SND <SPC> CLR  BAIL ', font=self.font, fill=255)
+                            elif self.col_index == 2:
+                                draw.text((0, 28), ' SND  SPC <CLR> BAIL ', font=self.font, fill=255)
+                            elif self.col_index == 3:
+                                draw.text((0, 28), ' SND  SPC  CLR <BAIL>' , font=self.font, fill=255)
+                except:
+                    self.log.error("m_COMPOSE Exception")
           #------[DEVICE REGISTRATION]----------------------------------------------------------------------
             elif self.mode == m_REG:
-                self.row = 51 + (self.row_index * self.row_height)
-                self.col = self.char_space * self.col_index
-                with canvas(self.device) as draw:
-                    draw.text((0, 0), "Name:", font=self.font, fill=255)
-                    draw.text((0, 8), "NetK:", font=self.font, fill=255)
-                    draw.text((0, 16), "GrpK:", font=self.font, fill=255)
-                    draw.text((30, 0), self.message.alias, font=self.font, fill=255)
-                    draw.text((30, 8), self.message.network_key, font=self.font, fill=255)
-                    draw.text((30, 16), self.message.group_key, font=self.font, fill=255)
-                    if self.reg_stage == 1:
-                        self.cursor_y = 0
-                        self.cursor_x = (len(self.message.alias) * 6) + 30
-                    elif self.reg_stage == 2:
-                        self.cursor_y = 8
-                        self.cursor_x = (len(self.message.network_key) * 6) + 30
-                    elif self.reg_stage == 3:
-                        self.cursor_y = 16
-                        self.cursor_x = (len(self.message.group_key) * 6) + 30
+                try:
+                    self.row = 51 + (self.row_index * self.row_height)
+                    self.col = self.char_space * self.col_index
+                    with canvas(self.device) as draw:
+                        draw.text((0, 0), "Name:", font=self.font, fill=255)
+                        draw.text((0, 8), "NetK:", font=self.font, fill=255)
+                        draw.text((0, 16), "GrpK:", font=self.font, fill=255)
+                        draw.text((30, 0), self.message.alias, font=self.font, fill=255)
+                        draw.text((30, 8), self.message.network_key, font=self.font, fill=255)
+                        draw.text((30, 16), self.message.group_key, font=self.font, fill=255)
+                        if self.reg_stage == 1:
+                            self.cursor_y = 0
+                            self.cursor_x = (len(self.message.alias) * 6) + 30
+                        elif self.reg_stage == 2:
+                            self.cursor_y = 8
+                            self.cursor_x = (len(self.message.network_key) * 6) + 30
+                        elif self.reg_stage == 3:
+                            self.cursor_y = 16
+                            self.cursor_x = (len(self.message.group_key) * 6) + 30
 
-                    if self.cursor and self.reg_stage != 4:
-                        draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
-                    self.cursor = not self.cursor
+                        if self.cursor and self.reg_stage != 4:
+                            draw.text((self.cursor_x, self.cursor_y), "<", font=self.font, fill=255)
+                        self.cursor = not self.cursor
 
-                    draw.line((0, 39, 127, 39), fill=255)
-                    draw.text((0, 40), keyboard[:21], font=self.font, fill=255)
-                    draw.text((0, 52), keyboard[21:], font=self.font, fill=255)
+                        draw.line((0, 39, 127, 39), fill=255)
+                        draw.text((0, 40), keyboard[:21], font=self.font, fill=255)
+                        draw.text((0, 52), keyboard[21:], font=self.font, fill=255)
 
-                    if self.row_index >= 0:
-                        if self.reg_stage == 4:
-                            draw.text((20, 28), ' NEXT   DONE ', font=self.font, fill=255)
-                        else:
-                            draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
-                        draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
-                    else:
-                        if self.col_index == 0:
+                        if self.row_index >= 0:
                             if self.reg_stage == 4:
-                                draw.text((20, 28), '<NEXT>  DONE ', font=self.font, fill=255)
-                            else:
-                                draw.text((20, 28), '<NEXT>', font=self.font, fill=255)
-                        elif self.col_index == 1:
-                            if self.reg_stage == 4:
-                                draw.text((20, 28), ' NEXT  <DONE>', font=self.font, fill=255)
+                                draw.text((20, 28), ' NEXT   DONE ', font=self.font, fill=255)
                             else:
                                 draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
+                            if self.key_repeating:
+                                self.cursor = True
+                            if self.cursor:
+                                draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
+                        else:
+                            if self.col_index == 0:
+                                if self.reg_stage == 4:
+                                    draw.text((20, 28), '<NEXT>  DONE ', font=self.font, fill=255)
+                                else:
+                                    draw.text((20, 28), '<NEXT>', font=self.font, fill=255)
+                            elif self.col_index == 1:
+                                if self.reg_stage == 4:
+                                    draw.text((20, 28), ' NEXT  <DONE>', font=self.font, fill=255)
+                                else:
+                                    draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
+                except:
+                    self.log.error("m_LOG_VIEWER Exception")
             self.event.wait(0.04)
 
         with canvas(self.device) as draw:

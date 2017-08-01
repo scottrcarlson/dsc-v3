@@ -16,14 +16,14 @@ BS = 16
 pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 unpad = lambda s : s[:-ord(s[len(s)-1:])]
 
-logging.basicConfig(level=logging.DEBUG,format='%(name)-12s| %(levelname)-8s| %(message)s')
+#logging.basicConfig(level=logging.DEBUG,format='%(name)-12s| %(levelname)-8s| %(message)s')
 
 class Crypto(object):
 	def __init__(self):
-		self.log = logging.getLogger(self.__class__.__name__)
+		self.log = logging.getLogger()
 		self.NETWORK_KEY = "mykey" # TODO: take input from keypad
 		self.GROUP_KEY = "mykey2"  # TODO: take input from keypad
-		self.log.setLevel(logging.WARN)
+		#self.log.setLevel(logging.DEBUG)
 
 	def encrypt(self, key, pt):
 		self.log.debug("was asked to encrypt this plaintext (len: %d):  %s" % (len(pt), binascii.hexlify(pt)))
@@ -41,8 +41,8 @@ class Crypto(object):
 		return ct
 
 	def decrypt(self, key, ct):
-		self.log.debug("was asked to decrypt this ciphertext(len: %s): %d " % (binascii.hexlify(ct), len(ct)))
-		#self.log.debug("key(%d): %s" %(len(key), binascii.hexlify(key)))
+		self.log.debug("was asked to decrypt this ciphertext(len: %d): %s " % (len(ct), binascii.hexlify(ct)))
+		#self.log.debug("key(%d): %s" %(len(key), binascii.hexlify(key)))	
 		key = pad(key)
 		#self.log.debug("padded_key(%d): %s" %(len(key), binascii.hexlify(key)))
 		#self.log.debug("iv(%d): %s" % (len(IV), binascii.hexlify(IV)))

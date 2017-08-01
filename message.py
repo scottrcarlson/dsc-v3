@@ -12,27 +12,26 @@ import datetime
 # Perodically fill outbound queue with packets on the repeat list
 # Processing Packets / Validating / De-Duping       
 class Message(Thread):
-    def __init__(self, crypto, config):
+    def __init__(self, crypto, config, heartbeat):
         Thread.__init__(self)
         self.event = Event()
-        self.log = logging.getLogger(self.__class__.__name__)
-        self.log.setLevel(logging.DEBUG)
+        self.log = logging.getLogger()
+        self.heartbeat = heartbeat
 
         self.config = config
         self.crypto = crypto
         self.is_radio_tx = False
 
         self.compose_msg = ""
-
-        #self.alias = self.config.alias.ljust(8) # 8 Character Alias Limit
         self.alias = ""
         self.network_key=""
         self.group_key=""
-        #self.network_key="eatme12345678901"
-        #self.group_key="eatme12345678900"
+        self.packet_ttl = 300
+        self.node_registered = False
 
         self.network_plaintexts = []
         self.group_cleartexts = []
+        self.recvd_beacons = {}
 
         self.repeat_msg_index = 0
         self.repeat_msg_list = []
@@ -49,40 +48,54 @@ class Message(Thread):
         self.event.wait(1)
         tick_ttl_reaper = 50
         cnt_ttl_reaper = 0
+        try:
+            heartbeat_time = time.time()
+        except:
+            self.log.error("What time is it?")
         while not self.event.is_set():
             try:
-                packet = self.radio_inbound_queue.get_nowait()
-            except Queue.Empty:
-                pass
-            else:
-                #self.log.debug("Processing inbound packet.")
-                self.process_packet(packet,'','')
+                heartbeat_time = time.time()
+                if self.heartbeat.qsize() == 0:
+                    self.heartbeat.put_nowait("hb")
 
-            #Handle TTL, expiration
-            if cnt_ttl_reaper > tick_ttl_reaper:
-                self.process_group_messages() #Better place for this..
-                #self.log.debug("Reaper gonna reap.")
-                cnt_ttl_reaper = 0
-                self.log.debug("Reap list size: %d " % (len(self.repeat_msg_list)))
-                for network_cipher in self.repeat_msg_list:
-                    network_plaintext = self.crypto.decrypt(self.network_key, str(network_cipher))
-                    packet_sent_time = struct.unpack(">I",network_plaintext[:4])[0]
-                    self.log.debug("Reap potential message 'sent time': %s" % (packet_sent_time))
-                    packet_ttl = struct.unpack(">I",network_plaintext[4:8])[0]
-                    self.log.debug("Reap potential message TTL: %s" % (packet_ttl))
-                    if time.time() > packet_sent_time + packet_ttl:
-                        self.log.debug("  Reap message.")
-                        self.repeat_msg_list.remove(network_cipher)
+                try:
+                    packet = self.radio_inbound_queue.get_nowait()
+                except Queue.Empty:
+                    pass
+                else:
+                    #self.log.debug("Processing inbound packet.")
+                    rssi,snr,msg = packet
+
+                    self.process_packet(msg,rssi,snr)
+
+                #Handle TTL, expiration
+                if cnt_ttl_reaper > tick_ttl_reaper:
+                    self.process_group_messages() #Better place for this..
+                    #self.log.debug("Reaper gonna reap.")
+                    cnt_ttl_reaper = 0
+                    #self.log.debug("Reap list size: %d " % (len(self.repeat_msg_list)))
+                    for network_cipher in self.repeat_msg_list:
+                        #  self.log.debug("Decrypting Network Message")
+                        network_plaintext = self.crypto.decrypt(self.network_key, str(network_cipher))
+                        packet_sent_time = struct.unpack(">I",network_plaintext[:4])[0]
+                        #self.log.debug("Reap potential message 'sent time': %s" % (packet_sent_time))
+                        packet_ttl = struct.unpack(">I",network_plaintext[4:8])[0]
+                        #self.log.debug("Reap potential message TTL: %s" % (packet_ttl))
+                        if time.time() > packet_sent_time + packet_ttl:
+                            self.log.debug("Message reaped.")
+                            self.repeat_msg_list.remove(network_cipher)
 
 
-                        with self.radio_outbound_queue.mutex:
-                            self.radio_outbound_queue.queue.clear()
-                    else:
-                        self.log.debug("  Reaper spared message.")
-            else:
-                cnt_ttl_reaper += 1
+                            with self.radio_outbound_queue.mutex:
+                                self.radio_outbound_queue.queue.clear()
+                        else:
+                            self.log.debug("Message spared -reaper.")
+                else:
+                    cnt_ttl_reaper += 1
 
-            self.fill_outbound_queue()
+                self.fill_outbound_queue()
+            except:
+                self.log.error("Exception")
             self.event.wait(0.2)
 
     def stop(self):
@@ -96,7 +109,11 @@ class Message(Thread):
                 self.radio_outbound_queue.put_nowait(msg)
 
 
-    def process_composed_msg(self, msg):
+    def generate_beacon(self):
+        if self.node_registered:
+            self.process_composed_msg("BEACON", True)
+
+    def process_composed_msg(self, msg, is_beacon=False):
         #DSCv3 Implement Message Encryption here
 
         #  Group Message Packet
@@ -105,7 +122,7 @@ class Message(Thread):
         #  208 bytes for Message
         #  Total 224 bytes group message Cipher
         author = self.alias
-        spare = "    " # 4 bytes
+        spare = "    "
         group_cleartext = author+'DSC3'+spare+msg
 
         #self.log.debug("Spare size:     [" + str(len(spare)) + "]")
@@ -122,17 +139,29 @@ class Message(Thread):
         # 8 bytes spare
         # 224 byte group cipher
         # Total 240 bytes OTA mesage cipher
-        timestamp = struct.pack(">I",time.time())
-        ttl_sp = 30 # 2 minutes
-        ttl = struct.pack(">I",ttl_sp)
+        timestamp = struct.pack(">I",time.time()) 
+        ttl = struct.pack(">I",self.packet_ttl)
         self.log.debug("Encrypting packet for /network/")
-        network_plaintext = timestamp+ttl+'DSC3'+'    '+group_cipher
-        ota_cipher = self.crypto.encrypt(self.network_key, network_plaintext)
-        self.log.debug("Adding this to repeat_msg_list: %s (%d)" % (binascii.hexlify(ota_cipher), len(ota_cipher)))
-        self.repeat_msg_list.append(ota_cipher)
 
-        self.network_plaintexts.append(network_plaintext)
-        self.process_group_messages()
+        if is_beacon:
+            msg_type = 'B'
+            spare = "   "
+        else:
+            msg_type = 'G'
+            spare = "   " # 3 bytes
+        network_plaintext = timestamp+ttl+'DSC3'+msg_type+spare+group_cipher
+        ota_cipher = self.crypto.encrypt(self.network_key, network_plaintext)
+
+        if not is_beacon:
+            self.log.debug("Adding this to repeat_msg_list: %s (%d)" % (binascii.hexlify(ota_cipher), len(ota_cipher)))
+            self.repeat_msg_list.append(ota_cipher)
+            self.network_plaintexts.append(network_plaintext)
+            self.process_group_messages()
+        else:
+            self.log.debug("Beacon Added to Queue.")
+            self.radio_beacon_queue.queue.clear()
+            self.radio_beacon_queue.put_nowait(ota_cipher)
+
         return True # TODO Lets capture crypto error and report back false
 
     def add_msg_to_repeat_list(self,msg):
@@ -152,7 +181,7 @@ class Message(Thread):
         return False
 
     def process_packet(self, msg, rf_rssi, rf_snr):
-        self.log.debug("Processing Network Message.. ") #RSSI/SNR: " + rf_rssi + "/" + rf_snr)
+        #self.log.debug("Processing Network Message.. ") #RSSI/SNR: " + rf_rssi + "/" + rf_snr)
         #self.log.debug("key:" + self.network_key + " size:" + str(len(self.network_key)))
         try:
             network_plaintext = self.crypto.decrypt(self.network_key, str(msg))
@@ -165,32 +194,45 @@ class Message(Thread):
                 packet_sent_time = struct.unpack(">I",network_plaintext[:4])[0]  # unpack() always returns a tuple
                 packet_ttl = struct.unpack(">I",network_plaintext[4:8])[0]  # unpack() always returns a tuple
                 packet_mac = network_plaintext[8:12]
-                packet_spare = network_plaintext[12:16]
+                msg_type = network_plaintext[12:13]
+                packet_spare = network_plaintext[13:16]
                 packet_group_cipher = network_plaintext[16:]
                 #self.log.debug("Packet MAC:    " + packet_mac)
                 #self.log.debug("Packet sent:   " + datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%Y-%m-%d %H:%M:%S"))
                 #self.log.debug("Packet TTL:    " +  str(packet_ttl) + " seconds")
                 #self.log.debug("Packet Spare: [" + packet_spare + "]")
-                if self.add_msg_to_repeat_list(msg):
-                    self.log.debug("Decrypting Group Message")
+                if msg_type == 'G':
+                    if self.add_msg_to_repeat_list(msg):
+                        self.log.debug("Decrypting Group Message")
+                        group_cleartext = self.crypto.decrypt(self.group_key, packet_group_cipher)
+                        if 'DSC3' in group_cleartext:
+                            packet_author = group_cleartext[:8].strip()
+                            packet_id = group_cleartext[8:12]
+                            packet_spare = group_cleartext[12:16]
+                            group_msg = group_cleartext[16:]
+                            #self.log.debug("Packet Author: " + packet_author)
+                            #self.log.debug("Packet ID:     " + packet_id)
+                            #self.log.debug("Packet Spare: [" + packet_spare + "]")
+                            #self.log.debug("Group Msg:     " + group_msg)
+                            
+                                
+                            if network_plaintext not in self.network_plaintexts:
+                                self.network_plaintexts.append(network_plaintext)
+                                self.process_group_messages()
+                elif msg_type == 'B':
                     group_cleartext = self.crypto.decrypt(self.group_key, packet_group_cipher)
                     if 'DSC3' in group_cleartext:
                         packet_author = group_cleartext[:8].strip()
-                        packet_id = group_cleartext[8:12]
-                        packet_spare = group_cleartext[12:16]
-                        group_msg = group_cleartext[16:]
-                        #self.log.debug("Packet Author: " + packet_author)
-                        #self.log.debug("Packet ID:     " + packet_id)
-                        #self.log.debug("Packet Spare: [" + packet_spare + "]")
-                        #self.log.debug("Group Msg:     " + group_msg)
-                        if network_plaintext not in self.network_plaintexts:
-                            self.network_plaintexts.append(network_plaintext)
-                            self.process_group_messages()
+                        self.recvd_beacons[packet_author] = (packet_sent_time, rf_rssi, rf_snr)
+                        self.log.debug("Beacon received. Alias: '" + packet_author + "' RSSI:" + str(rf_rssi) + " SNR:" + str(rf_snr))
+                else:
+                    self.log.warn("Unknown Msg Type: " + group_cleartext + " MsgType: " + msg_type)
             else:
                 self.log.debug("Packet Dropped due to missing MAC")
 
     def process_group_messages(self):
-        self.log.debug("Processing Group Messaeg")
+        #self.log.debug("Processing Group Message")
+        
         self.group_cleartexts = []
         for network_plaintext in self.network_plaintexts:
             group_cleartext = self.crypto.decrypt(self.group_key, network_plaintext[16:])
@@ -207,14 +249,7 @@ class Message(Thread):
                 time_since = str(int(age_sec / 60)) + "m|"
             #self.group_cleartexts.append(datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%m-%d %H:%M"))
             self.group_cleartexts.append(packet_author + '|' + time_since + group_msg)
-        """
-        self.log.debug("----------------- Beacon ------------------")
-        self.log.debug( "Beacon Recv'd [" + friend + '] RSSI/SNR:[' + rf_rssi + ']/[' + rf_snr + ']')
-        self.log.debug( "[" + friend + '] HASH:[' + beacon_hash + ']')
-        self.lastseen_name = alias
-        self.lastseen_rssi = rf_rssi
-        self.lastseen_snr = rf_snr
-        self.lastseen_time = time.time()
-        """
+            self.log.debug("GroupText Len: " +  str(len(self.group_cleartexts)))
+
 
         return True
