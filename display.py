@@ -29,7 +29,8 @@ m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
 m_RF_TUNING = 14
-#m_STATUS_LASTSEEN = 14
+m_LOCK=15
+
 
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
@@ -133,6 +134,13 @@ class Display(Thread):
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
+            elif self.mode == m_LOCK:
+                with canvas(self.device) as draw:
+                    logo = Image.open('/home/pi/dsc.png')
+                    draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
+                    draw.bitmap((0, 10), logo, fill=1)
+                    draw.text((0,40), "Hold LEFT and BACK to Unlock", font=self.font, fill=255)
+                    draw.text((0,50), "New Unread Msgs",font=self.font, fill=255)
             #------[LOG VIEWER]------------------------------------------------------------------$
             elif self.mode == m_LOG_VIEWER:
                 try:
@@ -152,6 +160,12 @@ class Display(Thread):
                     with canvas(self.device) as draw:
                         draw.line((121,3,124,0), fill=255)
                         draw.line((124,0,127,3), fill=255)
+                        if (self.row_index < self.viz_min):
+                            self.viz_max -= self.viz_min - self.row_index
+                            self.viz_min = self.row_index
+                        elif (self.row_index >= self.viz_max):
+                            self.viz_max = self.row_index + 1
+                            self.viz_min = self.viz_max - self.screen_row_size
                         #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
                         for i in range(0,len(scr.main_menu)):
                             draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)

@@ -17,22 +17,21 @@ import Queue
 import subprocess
 
 #DISPLAY MODES
-m_MAIN_MENU = 6
-m_COMPOSE = 5
-m_SPLASH = 2
-m_MSG_VIEWER = 8
-m_SETTINGS = 1
-m_LOG_VIEWER = 3
-
 m_IDLE = 0
-m_LOCK = 1
+m_SETTINGS = 1
+m_SPLASH = 2
+m_LOG_VIEWER = 3
 m_COMPOSE_MENU = 4
+m_COMPOSE = 5
+m_MAIN_MENU = 6
 m_DIALOG = 7
+m_MSG_VIEWER = 8
 m_DIALOG_YESNO = 9
 m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
-#m_STATUS_LASTSEEN = 14
+m_RF_TUNING = 14
+m_LOCK=15
 
 #DIALOG COMMAND (If Yes is Chosen)
 cmd_SHUTDOWN = 0
@@ -166,7 +165,7 @@ class UI(Thread):
         elif self.display.mode == m_MAIN_MENU:
             self.display.mode = m_IDLE
 
-    def lock(self):  #Key removed, clear any relevant data
+    def lock(self):  #Lock Screen to prevent key presses in pocket.
         self.message.compose_msg = ""
         self.display.mode = m_LOCK
 
@@ -191,10 +190,8 @@ class UI(Thread):
 
     def key_up(self, channel):
         self.is_idle = False
-        #self.display.key_up()
         if self.display.mode == m_IDLE:
-            #self.display.mode = m_LOCK
-            self.display.mode = m_STATUS
+            self.display.mode = m_LOCK
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
             if self.display.row_index == 1:
                 self.display.row_index = 0
@@ -224,10 +221,14 @@ class UI(Thread):
         self.is_idle = False
         ##print "pressed DOWN Key."
         if self.display.mode == m_IDLE:
-            self.display.mode = m_STATUS
+            self.display.mode = m_LOCK
         elif self.display.mode == m_DIALOG:
             self.display.dialog_confirmed = True
-        elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
+        elif self.display.mode == m_COMPOSE:
+            self.display.row_index += 1
+            if self.display.row_index > 1:
+                self.display.row_index = 1
+        elif self.display.mode == m_REG:
             self.display.row_index += 1
             if self.display.row_index > 1:
                 self.display.row_index = 1
@@ -252,7 +253,7 @@ class UI(Thread):
         self.is_idle = False
         ##print "pressed LEFT Key."
         if self.display.mode == m_IDLE:
-            self.display.mode = m_STATUS
+            self.display.mode = m_LOCK
         elif self.display.mode == m_DIALOG:
             self.display.dialog_confirmed = True
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
@@ -288,19 +289,25 @@ class UI(Thread):
                 self.config.tx_deadband -= 1
                 if self.config.tx_deadband < 1:
                     self.config.tx_deadband = 1
+        elif self.display.mode == m_LOCK:
+            if GPIO.input(iodef.PIN_KEY_ENTER) == self.active_high:
+                self.main_menu()
         
     def key_right(self, channel):
         self.is_idle = False
         ##print "pressed RIGHT Key."
         if self.display.mode == m_IDLE:
-            self.display.mode = m_STATUS
+            self.display.mode = m_LOCK
         elif self.display.mode == m_DIALOG:
             self.display.dialog_confirmed = True
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
+            items = 1
+            if self.display.mode == m_COMPOSE:
+                items = 3
             self.display.col_index += 1
             if self.display.row_index == -1:
-                if self.display.col_index > 1:
-                    self.display.col_index = 1
+                if self.display.col_index > items:
+                    self.display.col_index = items
             elif self.display.col_index > 20:
                 self.display.col_index = 0
                 if self.display.row_index == 0:
@@ -335,7 +342,7 @@ class UI(Thread):
     def key_enter(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
-            self.display.mode = m_STATUS
+            self.display.mode = m_LOCK
         elif self.display.mode == m_DIALOG:
             self.display.dialog_confirmed = True
         elif self.display.mode == m_REG:
@@ -464,7 +471,7 @@ class UI(Thread):
     def key_back(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
-            self.display.mode = m_STATUS
+            self.display.mode = m_LOCK
         elif self.display.mode == m_DIALOG:
             self.display.dialog_confirmed = True
         elif self.display.mode == m_MAIN_MENU:
@@ -479,6 +486,8 @@ class UI(Thread):
             self.main_menu();
         elif self.display.mode == m_LOG_VIEWER:
             self.main_menu();
+        elif self.display.mode == m_MSG_VIEWER:
+            self.main_menu();
         elif self.display.mode == m_REG:
             if self.display.reg_stage == 1:
                 self.message.alias = self.message.alias[:-1]
@@ -486,8 +495,18 @@ class UI(Thread):
                 self.message.network_key = self.message.network_key[:-1]
             elif self.display.reg_stage == 3:
                 self.message.group_key = self.message.group_key[:-1]
+        elif self.display.mode == m_LOCK:
+            if GPIO.input(iodef.PIN_KEY_LEFT) == self.active_high:
+                self.main_menu()
         else:
-            self.display.row_index = 0
-            self.display.col_index = 0
-            self.display.dialog_next_mode = m_MAIN_MENU
-            self.display.mode = m_MAIN_MENU
+            self.lock()
+            #self.display.row_index = 0
+            #self.display.col_index = 0
+            #self.display.dialog_next_mode = m_MAIN_MENU
+            #self.display.mode = m_LOCK
+
+
+
+
+
+

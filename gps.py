@@ -23,7 +23,9 @@ class Gps(Thread):
 		Thread.__init__(self)
 		print "Initializing GPS Thread."
 		self.stop_soon = False
+		self.log = logging.getLogger()
 		print " pynmea2 version:", pynmea2.__version__
+		
 	def start(self):
 		print "Startings GPS Thread."
 		com = None

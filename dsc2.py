@@ -8,7 +8,7 @@ from time import sleep
 from radio import Radio
 from display import Display
 from ui import UI
-from gps import Gps
+#from gps import Gps
 import iodef
 from message import Message
 from config import Config
