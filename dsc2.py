@@ -110,8 +110,6 @@ if __name__ == "__main__":
     ui = UI(display,message, crypto, config,heartbeat_ui)
     ui.start()
     ui.splash()
-    sleep(5)
-    ui.reg()
 
     heartbeat_time = time.time()
     while isRunning:

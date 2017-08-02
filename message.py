@@ -109,7 +109,7 @@ class Message(Thread):
                 self.radio_outbound_queue.put_nowait(msg)
 
     def generate_beacon(self):
-        if self.node_registered:
+        if self.node_registered and not self.config.airplane_mode:
             self.process_composed_msg("BEACON", True)
 
     def process_composed_msg(self, msg, is_beacon=False):

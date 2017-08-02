@@ -75,6 +75,7 @@ class UI(Thread):
         self.key_repeat = -1 # -1/None 0/Left 1/Right
         self.key_repeat_rate = 0.08
         self.key_repeat_delay = 0.5
+        self.dialog_delay = 0
         self.lock()
         self.log.info("Initialized UI Thread.")
 
@@ -83,6 +84,7 @@ class UI(Thread):
         key_repeat_time = 0
         key_delay_time = 0
         heartbeat_time = 0
+        dialog_time = 0
         idle_time = 0
         while not self.event.is_set():
             try:
@@ -92,7 +94,13 @@ class UI(Thread):
                         self.heartbeat.put_nowait("hb")
                 elif time.time() - heartbeat_time < 0:
                         self.log.warn("Time changed to past. Re-initializing.")
-                        heartbeat_time = time.time()    
+                        heartbeat_time = time.time() 
+                if self.display.mode == m_DIALOG:
+                    if dialog_time == 0:
+                        dialog_time = time.time()
+                    if time.time() - dialog_time > self.dialog_delay:
+                        dialog_time = 0
+                        self.display.dialog_confirmed = True
 
                 try:
                     if time.time() - idle_time > 15:
@@ -179,27 +187,18 @@ class UI(Thread):
         self.display.row_index = 0
         self.display.mode = m_MAIN_MENU
 
-    def create_msg(self, msg):
-        if self.display.mode != m_COMPOSE and self.display.mode != m_IDLE:
-            self.message.compose_msg = msg
-            self.display.mode = m_COMPOSE
-            self.display.row_index = 0
-            self.display.col_index = 0
-            return True
-        return False
-
     def key_up(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
+        elif self.display.mode == m_SPLASH:
+            self.reg()
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
             if self.display.row_index == 1:
                 self.display.row_index = 0
             else:
                 self.display.row_index = -1
                 self.display.col_index = 0
-        elif self.display.mode == m_DIALOG:
-            self.display.dialog_confirmed = True
         elif self.display.mode == m_MAIN_MENU:
             self.display.row_index -= 1
             if self.display.row_index < 0:
@@ -225,8 +224,8 @@ class UI(Thread):
         ##print "pressed DOWN Key."
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
-        elif self.display.mode == m_DIALOG:
-            self.display.dialog_confirmed = True
+        elif self.display.mode == m_SPLASH:
+            self.reg()
         elif self.display.mode == m_COMPOSE:
             self.display.row_index += 1
             if self.display.row_index > 1:
@@ -261,8 +260,8 @@ class UI(Thread):
         ##print "pressed LEFT Key."
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
-        elif self.display.mode == m_DIALOG:
-            self.display.dialog_confirmed = True
+        elif self.display.mode == m_SPLASH:
+            self.reg()
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
             self.display.col_index -= 1
             if self.display.row_index == -1:
@@ -281,18 +280,20 @@ class UI(Thread):
                 self.display.col_index = 0
         elif self.display.mode == m_SETTINGS:
             if self.display.row_index == 1:
+                self.config.airplane_mode = False
+            if self.display.row_index == 2:
                 self.config.tdma_total_slots -= 1
                 if self.config.tdma_total_slots < 2: #Whats the point if not at least 2?!
                     self.config.tdma_total_slots = 2
-            elif self.display.row_index == 2:
+            elif self.display.row_index == 3:
                 self.config.tdma_slot -= 1
                 if self.config.tdma_slot < 0:
                     self.config.tdma_slot = 0
-            elif self.display.row_index == 3:
+            elif self.display.row_index == 4:
                 self.config.tx_time -= 1
                 if self.config.tx_time < 1:
                     self.config.tx_time = 1
-            elif self.display.row_index == 4:
+            elif self.display.row_index == 5:
                 self.config.tx_deadband -= 1
                 if self.config.tx_deadband < 1:
                     self.config.tx_deadband = 1
@@ -305,8 +306,8 @@ class UI(Thread):
         ##print "pressed RIGHT Key."
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
-        elif self.display.mode == m_DIALOG:
-            self.display.dialog_confirmed = True
+        elif self.display.mode == m_SPLASH:
+            self.reg()
         elif self.display.mode == m_COMPOSE or self.display.mode == m_REG:
             items = 1
             if self.display.mode == m_COMPOSE:
@@ -328,12 +329,14 @@ class UI(Thread):
                 self.display.col_index = 1
         elif self.display.mode == m_SETTINGS:
             if self.display.row_index == 1:
-                self.config.tdma_total_slots += 1
+                self.config.airplane_mode = True
             elif self.display.row_index == 2:
-                self.config.tdma_slot += 1
+                self.config.tdma_total_slots += 1
             elif self.display.row_index == 3:
-                self.config.tx_time += 1
+                self.config.tdma_slot += 1
             elif self.display.row_index == 4:
+                self.config.tx_time += 1
+            elif self.display.row_index == 5:
                 self.config.tx_deadband += 1
 
     #self.display.dialog_msg = "Main Dialog Msg"
@@ -350,8 +353,8 @@ class UI(Thread):
         self.is_idle = False
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
-        elif self.display.mode == m_DIALOG:
-            self.display.dialog_confirmed = True
+        elif self.display.mode == m_SPLASH:
+            self.reg()
         elif self.display.mode == m_REG:
             if self.display.row_index >= 0:
                 index = (self.display.row_index * 21) + self.display.col_index
@@ -393,11 +396,11 @@ class UI(Thread):
                     self.message.compose_msg = self.message.compose_msg + keyboard[index:index+1]
             else:
                 if self.display.col_index == 0:
-                    self.display.dialog_msg = "Message Sent!"
-                    self.display.dialog_msg3 = "==[Press AnyKey]=="
+                    self.display.dialog_msg3 = "  Sending Message..."
                     self.message.process_composed_msg(self.message.compose_msg)
                     self.display.row_index = 0
                     self.display.col_index = 0
+                    self.dialog_delay = 2
                     self.display.mode = m_DIALOG
                 elif self.display.col_index == 1:
                     self.message.compose_msg += " "
@@ -430,9 +433,17 @@ class UI(Thread):
         elif self.display.mode == m_MAIN_MENU:
             self.log.debug( "MainMenu Selected: " +scr.main_menu[self.display.row_index])
             if self.display.row_index == 0:
-                self.display.row_index = 0
-                self.display.col_index = 0
-                self.display.mode = m_COMPOSE_MENU
+                if self.config.airplane_mode:
+                    self.display.dialog_msg3 = " Airplane Mode Active"
+                    self.display.row_index = 0
+                    self.display.col_index = 0
+                    self.dialog_delay = 2
+                    self.display.mode = m_DIALOG
+                    self.display.dialog_next_mode = m_MAIN_MENU
+                else:
+                    self.display.row_index = 0
+                    self.display.col_index = 0
+                    self.display.mode = m_COMPOSE_MENU
             elif self.display.row_index == 1:
                 self.display.row_index = 0
                 self.display.col_index = 0
@@ -480,8 +491,8 @@ class UI(Thread):
         self.is_idle = False
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
-        elif self.display.mode == m_DIALOG:
-            self.display.dialog_confirmed = True
+        elif self.display.mode == m_SPLASH:
+            self.reg()
         elif self.display.mode == m_MAIN_MENU:
             #self.display.mode = m_STATUS
             pass

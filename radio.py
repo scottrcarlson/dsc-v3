@@ -158,17 +158,18 @@ class Radio(Thread):
                 self.log.error("EXCEPTION PKT_RECV_CONT: ", exc_info=True)
 
         else:
-            if len(received_data) > 0:
-                self.update_stats = True
-                msg = received_data[3:]
-                self.total_recv += 1
+            if not self.config.airplane_mode:
+                if len(received_data) > 0:
+                    self.update_stats = True
+                    msg = received_data[3:]
+                    self.total_recv += 1
 
-                (rssi, ) = struct.unpack_from('<h', bytes(received_data[:2]))
-                snr = received_data[2] / 4.0
+                    (rssi, ) = struct.unpack_from('<h', bytes(received_data[:2]))
+                    snr = received_data[2] / 4.0
 
-                if self.message.node_registered:
-                    self.message.radio_inbound_queue.put_nowait((rssi,snr,msg))
-                sleep(0.15)
+                    if self.message.node_registered:
+                        self.message.radio_inbound_queue.put_nowait((rssi,snr,msg))
+                    sleep(0.15)
 
         finally:
             self.is_check_inbound = False
@@ -183,33 +184,34 @@ class Radio(Thread):
 
 
     def process_outbound_msg(self):
-        outbound_data = ''
-        try:
-            outbound_data = self.message.radio_beacon_queue.get_nowait()
-            self.log.debug("Sending Beacon: " + str(self.message.radio_beacon_queue.qsize()))
-        except Queue.Empty:
+        if not self.config.airplane_mode:
+            outbound_data = ''
             try:
-                outbound_data = self.message.radio_outbound_queue.get_nowait()
-                self.tx_throttle = ((1.0 / 510.0) * len(outbound_data)) + 0.3 #Scale found empiracaly (ie. no radio errors)
-                #self.log.debug(str(len(outbound_data)) + " bytes/tx_throttle=" + str(self.tx_throttle))
+                outbound_data = self.message.radio_beacon_queue.get_nowait()
+                self.log.debug("Sending Beacon: " + str(self.message.radio_beacon_queue.qsize()))
             except Queue.Empty:
-                pass
-        if outbound_data != '':
-            self.is_check_outbound = True
-            try:
-                r = self.mc._send_command(OPCODES['PKT_SEND_QUEUE'], outbound_data)
-                sleep(0.025)
-                self.is_check_outbound = False
+                try:
+                    outbound_data = self.message.radio_outbound_queue.get_nowait()
+                    self.tx_throttle = ((1.0 / 510.0) * len(outbound_data)) + 0.3 #Scale found empiracaly (ie. no radio errors)
+                    #self.log.debug(str(len(outbound_data)) + " bytes/tx_throttle=" + str(self.tx_throttle))
+                except Queue.Empty:
+                    pass
+            if outbound_data != '':
+                self.is_check_outbound = True
+                try:
+                    r = self.mc._send_command(OPCODES['PKT_SEND_QUEUE'], outbound_data)
+                    sleep(0.025)
+                    self.is_check_outbound = False
 
-            except Exception, e:
-                if self.radio_verbose > 0:
-                    self.log.error("EXCEPTION PKT_SEND_QUEUE: ", exc_info=True)
-                self.total_exceptions += 1
-                self.is_check_outbound = False
-                self.reset_radio()
+                except Exception, e:
+                    if self.radio_verbose > 0:
+                        self.log.error("EXCEPTION PKT_SEND_QUEUE: ", exc_info=True)
+                    self.total_exceptions += 1
+                    self.is_check_outbound = False
+                    self.reset_radio()
 
-                sleep(0.025)
-            self.update_stats = True
+                    sleep(0.025)
+                self.update_stats = True
 
     def check_irq(self,channel):
         if not self.ignore_radio_irq:

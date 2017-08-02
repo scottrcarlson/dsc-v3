@@ -5,17 +5,21 @@
 import ConfigParser
 import os
 import errno
+import logging
 
 CONFIG_PATH = "/dscdata"
 CONFIG_FILE = "dsc.config"
 
 class Config(object):
     def __init__(self):
+        self.log = logging.getLogger()
+
         self.tdma_slot = 0
         self.tdma_total_slots = 2
         self.tx_time = 4
         self.tx_deadband = 1
         self.hw_rev = 1
+        self.airplane_mode = True
         self.cfg = ConfigParser.ConfigParser()
         try:
             os.makedirs(CONFIG_PATH)
@@ -41,12 +45,17 @@ class Config(object):
             self.cfg.set('Network','TDMA_Total_Slots',self.tdma_total_slots)
             self.cfg.set('Network','TX_Time',self.tx_time)
             self.cfg.set('Network','TX_Deadband',self.tx_deadband)
+            self.cfg.set('Network','Airplane_Mode',self.airplane_mode)
             self.cfg.write(cfgfile)
 
     def load_config(self):
-        self.cfg.read(CONFIG_PATH + '/' + CONFIG_FILE)
-        self.hw_rev = self.cfg.getint("Network","Hardware_Rev")
-        self.tdma_slot = self.cfg.getint("Network","TDMA_Slot")
-        self.tdma_total_slots = self.cfg.getint("Network","TDMA_Total_Slots")
-        self.tx_time = self.cfg.getint("Network","TX_Time")
-        self.tx_deadband = self.cfg.getint("Network","TX_Deadband")
+        try:
+            self.cfg.read(CONFIG_PATH + '/' + CONFIG_FILE)
+            self.hw_rev = self.cfg.getint("Network","Hardware_Rev")
+            self.tdma_slot = self.cfg.getint("Network","TDMA_Slot")
+            self.tdma_total_slots = self.cfg.getint("Network","TDMA_Total_Slots")
+            self.tx_time = self.cfg.getint("Network","TX_Time")
+            self.tx_deadband = self.cfg.getint("Network","TX_Deadband")
+            self.airplane_mode = self.cfg.getbool("Network","Airplane_Mode")
+        except Exception as e:
+            self.log.error(str(e))

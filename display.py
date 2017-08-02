@@ -140,13 +140,15 @@ class Display(Thread):
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
+                    draw.text((0,40), "    Press any key    ", font=self.font, fill=255)
+                    draw.text((0,50), "   Register Device   ", font=self.font, fill=255)
             #------[LOCK SCREEN]------------------------------------------------------------------$
             elif self.mode == m_LOCK:
                 with canvas(self.device) as draw:
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
-                    draw.text((0,40), "LEFT & BACK to Unlock", font=self.font, fill=255)
+                    draw.text((0,40), "LEFT + BACK to Unlock", font=self.font, fill=255)
                     draw.text((0,50), "       New Msgs",font=self.font, fill=255)
             #------[LOG VIEWER]------------------------------------------------------------------$
             elif self.mode == m_LOG_VIEWER:
@@ -187,11 +189,11 @@ class Display(Thread):
                 try:
                     with canvas(self.device) as draw:
                         draw.text((0, 0), "-- Network Settings --", font=self.font, fill=255)
-                        draw.text((0, 10), "Total Nodes:" + str(self.config.tdma_total_slots), font=self.font, fill=255)
-                        draw.text((0, 20), "TDMA Slot(0-n):" + str(self.config.tdma_slot), font=self.font, fill=255)
-                        draw.text((0, 30), "TX Time(s):" + str(self.config.tx_time), font=self.font, fill=255)
-                        draw.text((0, 40), "Deadband(s):" + str(self.config.tx_deadband), font=self.font, fill=255)
-                        draw.text((0, 50), "Packet TTL(s):" + str(self.message.packet_ttl), font=self.font, fill=255)
+                        draw.text((0, 10), "Airplane Mode:" + str(self.config.airplane_mode), font=self.font, fill=255)
+                        draw.text((0, 20), "Total Nodes:" + str(self.config.tdma_total_slots), font=self.font, fill=255)
+                        draw.text((0, 30), "TDMA Slot(0-n):" + str(self.config.tdma_slot), font=self.font, fill=255)
+                        draw.text((0, 40), "TX Time(s):" + str(self.config.tx_time), font=self.font, fill=255)
+                        draw.text((0, 50), "Deadband(s):" + str(self.config.tx_deadband), font=self.font, fill=255)
                         if self.row_index == 1:
                             self.cursor_y = 10
                             self.cursor_x = 12 * 6
@@ -204,6 +206,9 @@ class Display(Thread):
                         elif self.row_index == 4:
                             self.cursor_y = 40
                             self.cursor_x = 12 * 6
+                        elif self.row_index == 5:
+                            self.cursor_y = 50
+                            self.cursor_x = 14 * 6
                         if self.cursor:
                             draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
                         self.cursor = not self.cursor
@@ -243,13 +248,16 @@ class Display(Thread):
             elif self.mode == m_STATUS:
                 try:
                     with canvas(self.device) as draw:
-                        current_datetime = time.strftime("%H:%M:%S")
+                        current_datetime = time.strftime("%m/%d %H:%M:%S")
                         radio_mode = ''
-                        if self.message.is_radio_tx:
-                            radio_mode = 'TX'
+                        if self.config.airplane_mode:
+                            radio_mode = '[OFF'
                         else:
-                            radio_mode = 'RX'
-                        draw.text((0, 0), radio_mode + " / " + current_datetime, font=self.font, fill=255)
+                            if self.message.is_radio_tx:
+                                radio_mode = ' [TX'
+                            else:
+                                radio_mode = ' [RX'
+                        draw.text((0, 0), radio_mode + "] " + current_datetime, font=self.font, fill=255)
 
                         row = 1
                         for alias in self.message.recvd_beacons:

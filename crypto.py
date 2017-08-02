@@ -21,8 +21,8 @@ unpad = lambda s : s[:-ord(s[len(s)-1:])]
 class Crypto(object):
 	def __init__(self):
 		self.log = logging.getLogger()
-		self.NETWORK_KEY = "mykey" # TODO: take input from keypad
-		self.GROUP_KEY = "mykey2"  # TODO: take input from keypad
+		self.NETWORK_KEY = ""
+		self.GROUP_KEY = ""
 		#self.log.setLevel(logging.DEBUG)
 
 	def encrypt(self, key, pt):
