@@ -209,6 +209,9 @@ class UI(Thread):
             if self.display.row_index < 0:
                 self.display.row_index = 0
         elif self.display.mode == m_MSG_VIEWER:
+            self.display.horiz_index = 0
+            self.display.horiz_reset_cnt = 0
+            self.display.horiz_start_cnt = 0
             self.display.row_index -= 1
             if self.display.row_index < 0:
                 self.display.row_index = 0
@@ -241,9 +244,13 @@ class UI(Thread):
             if self.display.row_index >= len(scr.compose_menu):
                 self.display.row_index = len(scr.compose_menu) -1
         elif self.display.mode == m_MSG_VIEWER:
-            self.display.row_index += 1
-            if self.display.row_index >= len(self.message.group_cleartexts):
-                self.display.row_index = len(self.message.group_cleartexts) -1
+            self.display.horiz_index = 0
+            self.display.horiz_reset_cnt = 0
+            self.display.horiz_start_cnt = 0
+            if len(self.message.group_cleartexts) != 0:
+                self.display.row_index += 1
+                if self.display.row_index >= len(self.message.group_cleartexts):
+                    self.display.row_index = len(self.message.group_cleartexts) -1
         elif self.display.mode == m_SETTINGS:
             self.display.row_index += 1
             if self.display.row_index > 4:

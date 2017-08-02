@@ -1,5 +1,8 @@
 # DSCv3
 
+[What is Dirt Simple Comms (DSC) ?]
+------------------
+
 [Goals]
 ----------------
  1. To not require existing infrastructure
@@ -12,3 +15,15 @@
  8. Low Cost / Low Power / Long Range
  9. Small Form Factor / Portable
  10. Utilize LoRA Modulated 900mhz Radio System
+
+[Bill of Materials]
+------------------
+
+[Assembly / Wiring]
+------------------
+
+[Configuring Vanilla Raspian]
+------------------
+
+[Install DSCv3 Software]
+------------------

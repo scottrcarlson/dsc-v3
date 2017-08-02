@@ -108,7 +108,6 @@ class Message(Thread):
             for msg in self.repeat_msg_list:
                 self.radio_outbound_queue.put_nowait(msg)
 
-
     def generate_beacon(self):
         if self.node_registered:
             self.process_composed_msg("BEACON", True)

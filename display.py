@@ -67,6 +67,12 @@ class Display(Thread):
         self.char_size = 4
         self.row_height = 12
         self.screen_row_size = 5
+        self.screen_col_size = 21
+        self.horiz_min = 0
+        self.horiz_max = self.screen_col_size - 1
+        self.horiz_index = 0
+        self.horiz_reset_cnt = 0
+        self.horiz_start_cnt = 0
         self.viz_min = 0
         self.viz_max = self.screen_row_size
 
@@ -134,13 +140,14 @@ class Display(Thread):
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
+            #------[LOCK SCREEN]------------------------------------------------------------------$
             elif self.mode == m_LOCK:
                 with canvas(self.device) as draw:
                     logo = Image.open('/home/pi/dsc.png')
                     draw.text((6, 0), 'dirt   simple  comms', font=self.font, fill=255)
                     draw.bitmap((0, 10), logo, fill=1)
-                    draw.text((0,40), "Hold LEFT and BACK to Unlock", font=self.font, fill=255)
-                    draw.text((0,50), "New Unread Msgs",font=self.font, fill=255)
+                    draw.text((0,40), "LEFT & BACK to Unlock", font=self.font, fill=255)
+                    draw.text((0,50), "       New Msgs",font=self.font, fill=255)
             #------[LOG VIEWER]------------------------------------------------------------------$
             elif self.mode == m_LOG_VIEWER:
                 try:
@@ -172,7 +179,7 @@ class Display(Thread):
                         draw.line((121,60,124,63), fill=255)
                         draw.line((124,63,127,60), fill=255)
 
-                        draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                        draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '>', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
             #------[SETTINGS SCREEN]------------------------------------------------------------------$     
@@ -330,15 +337,46 @@ class Display(Thread):
                             self.viz_min = self.viz_max - self.screen_row_size
                         #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
                         group_cleartexts = self.message.group_cleartexts
-                        if len(group_cleartexts) < self.viz_max:
-                            max = len(group_cleartexts)
-                        else:
-                            max = self.viz_max
-                        for i in range(self.viz_min,max):
-                            draw.text((0, 4+( (i-self.viz_min) * self.row_height) ), group_cleartexts[i], font=self.font, fill=255)
-                        #else:
-                            #draw.text((0, 0),"No Messages", font=self.font, fill=255)
 
+                        if len(group_cleartexts) == 0:
+                            draw.text((6, 4),"No Messages", font=self.font, fill=255)
+                        else:
+                            if len(group_cleartexts) < self.viz_max:
+                                max = len(group_cleartexts)
+                            else:
+                                max = self.viz_max
+
+                            for i in range(self.viz_min,max):
+                                if i == self.row_index:
+                                    if len(group_cleartexts[i]) < self.horiz_max:
+                                        hmin = self.horiz_min
+                                        hmax = len(group_cleartexts[i])
+                                    elif len(group_cleartexts[i]) > self.horiz_max + self.horiz_index:
+                                        hmin = self.horiz_min + self.horiz_index
+                                        hmax = self.horiz_max + self.horiz_index
+                                    else:
+                                        if self.horiz_reset_cnt == 3:
+                                            self.horiz_reset_cnt = 0
+                                            self.horiz_start_cnt = 0
+                                            self.horiz_index = 0
+                                            hmin = self.horiz_min
+                                            hmax = self.horiz_max
+                                        else:
+                                            self.horiz_reset_cnt += 1
+
+                                    draw.text((6, 4+( (i-self.viz_min) * self.row_height) ), group_cleartexts[i][hmin:hmax], font=self.font, fill=255)
+                                else:
+                                    draw.text((6, 4+( (i-self.viz_min) * self.row_height) ), group_cleartexts[i], font=self.font, fill=255)
+
+                            if self.horiz_start_cnt == 3:
+                                self.horiz_index += 1
+                            else:
+                                self.horiz_start_cnt += 1
+
+                            if len(group_cleartexts[self.row_index]) > self.screen_col_size - 1:
+                                draw.text((0, 4 + (self.row_height* (self.row_index - self.viz_min))), '+', font=self.font, fill=255)    
+                            else:
+                                draw.text((0, 4 + (self.row_height* (self.row_index - self.viz_min))), '>', font=self.font, fill=255)    
                         draw.line((121,60,124,63), fill=255)
                         draw.line((124,63,127,60), fill=255)
 
@@ -425,7 +463,7 @@ class Display(Thread):
                                     draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
-            self.event.wait(0.04)
+            self.event.wait(0.03)
 
         with canvas(self.device) as draw:
             pass
