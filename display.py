@@ -69,7 +69,7 @@ class Display(Thread):
         self.screen_row_size = 5
         self.screen_col_size = 21
         self.horiz_min = 0
-        self.horiz_max = self.screen_col_size - 1
+        self.horiz_max = self.screen_col_size
         self.horiz_index = 0
         self.horiz_reset_cnt = 0
         self.horiz_start_cnt = 0
@@ -389,7 +389,22 @@ class Display(Thread):
                     self.row = 51 + (self.row_index * self.row_height)
                     self.col = self.char_space * self.col_index
                     with canvas(self.device) as draw:
-                        draw.text((0, 0), self.message.compose_msg, font=self.font, fill=255)
+                        msg_line1 = ""
+                        msg_line2 = ""
+                        msg_line3 = ""
+                        if len(self.message.compose_msg) > self.horiz_max:
+                            msg_line1 = self.message.compose_msg[:self.horiz_max]
+                            if len(self.message.compose_msg) > self.horiz_max * 2:
+                                msg_line2 = self.message.compose_msg[self.horiz_max:self.horiz_max*2]
+                                msg_line3 = self.message.compose_msg[self.horiz_max*2:]
+                            else:
+                                msg_line2 = self.message.compose_msg[self.horiz_max:]
+                        else:
+                            msg_line1 = self.message.compose_msg
+                        draw.text((0, 0), msg_line1, font=self.font, fill=255)
+                        draw.text((0, 10), msg_line2, font=self.font, fill=255)
+                        draw.text((0, 20), msg_line3, font=self.font, fill=255)
+
                         draw.line((0, 39, 127, 39), fill=255)
                         draw.text((0, 40), keyboard[:21], font=self.font, fill=255)
                         draw.text((0, 52), keyboard[21:], font=self.font, fill=255)

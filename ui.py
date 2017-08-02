@@ -388,8 +388,9 @@ class UI(Thread):
 
         elif self.display.mode == m_COMPOSE:
             if self.display.row_index >= 0:
-                index = (self.display.row_index * 21) + self.display.col_index
-                self.message.compose_msg = self.message.compose_msg + keyboard[index:index+1]
+                if len(self.message.compose_msg) < self.display.horiz_max * 3:
+                    index = (self.display.row_index * 21) + self.display.col_index
+                    self.message.compose_msg = self.message.compose_msg + keyboard[index:index+1]
             else:
                 if self.display.col_index == 0:
                     self.display.dialog_msg = "Message Sent!"
