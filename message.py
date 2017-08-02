@@ -50,8 +50,8 @@ class Message(Thread):
         cnt_ttl_reaper = 0
         try:
             heartbeat_time = time.time()
-        except:
-            self.log.error("What time is it?")
+        except Exception as e:
+                self.log.error(str(e))
         while not self.event.is_set():
             try:
                 heartbeat_time = time.time()
@@ -94,8 +94,8 @@ class Message(Thread):
                     cnt_ttl_reaper += 1
 
                 self.fill_outbound_queue()
-            except:
-                self.log.error("Exception")
+            except Exception as e:
+                self.log.error(str(e))
             self.event.wait(0.2)
 
     def stop(self):

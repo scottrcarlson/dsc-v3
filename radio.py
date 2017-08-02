@@ -81,8 +81,8 @@ class Radio(Thread):
                 elif time.time() - heartbeat_time < 0:
                     self.log.warn("Time changed to past. Re-initializing.")
                     heartbeat_time = time.time()
-            except:
-                self.log.error("What time is it?")
+            except Exception as e:
+                self.log.error(str(e))
             self.event.wait(0.05)
 
             try:

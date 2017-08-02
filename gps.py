@@ -46,8 +46,8 @@ class Gps(Thread):
 					if isinstance(parsed, pynmea2.types.talker.GGA):
 						# print lat+lon that can be parsed by http://maps.google.com
 						print "", str(parsed.latitude) + str(parsed.lat_dir), str(parsed.longitude).replace("-", "") + str(parsed.lon_dir)
-				except:
-					print "horse"
+				except Exception as e:
+                	self.log.error(str(e))
 				time.sleep(4)
 
 	def stop(self):

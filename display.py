@@ -57,6 +57,7 @@ class Display(Thread):
             #self.device = Adafruit_SSD1306.SSD1306_128_64(rst=24)
             self.device = ssd1306(port=1, address=0x3C)
         self.font = ImageFont.load_default()
+        #self.font = ImageFont.truetype("5by7.ttf",10)
         self.mode = m_IDLE
 
         self.row_index = 0
@@ -119,8 +120,8 @@ class Display(Thread):
                 elif time.time() - heartbeat_time < 0:
                     self.log.warn("Time changed to past. Re-initializing.")
                     heartbeat_time = time.time()
-            except:
-                self.log.error("What time is it?")
+            except Exception as e:
+                self.log.error(str(e))
             #------[IDLE]--------------------------------------------------------------------------
             if self.mode == m_IDLE:
                 with canvas(self.device) as draw:
@@ -142,8 +143,8 @@ class Display(Thread):
                     with canvas(self.device) as draw:
                         for i in range(0,6):
                             draw.text((0, i*10), log_tail_results[i], font=self.font, fill=255)
-                except:
-                    self.log.error("m_LOG_VIEWER Exception")
+                except Exception as e:
+                    self.log.error(str(e))
                 
             #------[MAIN MENU]----------------------------------------------------------------------
             elif self.mode == m_MAIN_MENU:
@@ -158,8 +159,8 @@ class Display(Thread):
                         draw.line((124,63,127,60), fill=255)
 
                         draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
-                except:
-                    self.log.error("m_MAIN_MENU Exception")
+                except Exception as e:
+                    self.log.error(str(e))
             #------[SETTINGS SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_SETTINGS:
                 try:
@@ -185,8 +186,8 @@ class Display(Thread):
                         if self.cursor:
                             draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
                         self.cursor = not self.cursor
-                except:
-                    self.log.error("m_SETTINGS Exception")
+                except Exception as e:
+                    self.log.error(str(e))
              #------[RF TUNING SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_RF_TUNING:
                 try:
@@ -215,8 +216,8 @@ class Display(Thread):
                         if self.cursor:
                             draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
                         self.cursor = not self.cursor
-                except:
-                    self.log.error("m_RF_TUNING Exception")
+                except Exception as e:
+                    self.log.error(str(e))
             #------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS:
                 try:
@@ -240,8 +241,8 @@ class Display(Thread):
                                 time_since = str(int(age_sec / 60)) + "m"
                             draw.text((0, 10 * row), alias +"|"+ time_since +"|"+str(rssi)+"|"+str(snr), font=self.font, fill=255)
                             row += 1
-                except:
-                    self.log.error("m_STATUS Exception") #LOG Exceptions here
+                except Exception as e:
+                    self.log.error(str(e))
             #------[DIALOG]-------------------------------------------------------------------    $
             elif self.mode == m_DIALOG:
                 if self.dialog_confirmed:
@@ -299,8 +300,8 @@ class Display(Thread):
                         draw.line((121,60,124,63), fill=255)
                         draw.line((124,63,127,60), fill=255)
                         draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
-                except:
-                    self.log.error("m_COMPOSE_MENU Exception")
+                except Exception as e:
+                    self.log.error(str(e))
             #------[MSG THREAD VIEWER]-------
             elif self.mode == m_MSG_VIEWER:
                 try:
@@ -314,7 +315,7 @@ class Display(Thread):
                             self.viz_max = self.row_index + 1
                             self.viz_min = self.viz_max - self.screen_row_size
                         #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
-                        group_cleartexts = self.message.group_cleartexts # Make a copy so another thread can't cause issues.
+                        group_cleartexts = self.message.group_cleartexts
                         if len(group_cleartexts) < self.viz_max:
                             max = len(group_cleartexts)
                         else:
@@ -328,8 +329,8 @@ class Display(Thread):
                         draw.line((124,63,127,60), fill=255)
 
                         #draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
-                except:
-                    self.log.error("m_MSG_VIEWER Exception")
+                except Exception as e:
+                    self.log.error(str(e))
           #------[COMPOSE MSG]----------------------------------------------------------------
             elif self.mode == m_COMPOSE:
                 try:
@@ -356,8 +357,8 @@ class Display(Thread):
                                 draw.text((0, 28), ' SND  SPC <CLR> BAIL ', font=self.font, fill=255)
                             elif self.col_index == 3:
                                 draw.text((0, 28), ' SND  SPC  CLR <BAIL>' , font=self.font, fill=255)
-                except:
-                    self.log.error("m_COMPOSE Exception")
+                except Exception as e:
+                    self.log.error(str(e))
           #------[DEVICE REGISTRATION]----------------------------------------------------------------------
             elif self.mode == m_REG:
                 try:
@@ -408,8 +409,8 @@ class Display(Thread):
                                     draw.text((20, 28), ' NEXT  <DONE>', font=self.font, fill=255)
                                 else:
                                     draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
-                except:
-                    self.log.error("m_LOG_VIEWER Exception")
+                except Exception as e:
+                    self.log.error(str(e))
             self.event.wait(0.04)
 
         with canvas(self.device) as draw:
