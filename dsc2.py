@@ -104,10 +104,10 @@ if __name__ == "__main__":
     #gps = Gps()
     #gps.start()
 
-    display = Display(message, version, config, radio, revision, heartbeat_display)
+    display = Display(message, version, config, revision, heartbeat_display)
     display.start()
 
-    ui = UI(display,message, crypto, config,heartbeat_ui)
+    ui = UI(display,message, crypto, radio, config,heartbeat_ui)
     ui.start()
     ui.splash()
 

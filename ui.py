@@ -41,7 +41,7 @@ cmd_MANUALSYNCCLK = 2
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
 class UI(Thread):
-    def __init__(self, display, message, crypto, config, heartbeat):
+    def __init__(self, display, message, crypto, radio, config, heartbeat):
         Thread.__init__(self)
         self.event = Event()
         self.log = logging.getLogger()
@@ -69,6 +69,7 @@ class UI(Thread):
         self.crypto = crypto
         self.message = message
         self.config = config
+        self.radio = radio 
 
         self.is_idle = False
 
@@ -214,10 +215,14 @@ class UI(Thread):
             self.display.row_index -= 1
             if self.display.row_index < 0:
                 self.display.row_index = 0
+        elif self.display.mode == m_RF_TUNING:
+            self.display.row_index -= 1
+            if self.display.row_index < 0:
+                self.display.row_index = 0
         elif self.display.mode == m_SETTINGS:
             self.display.row_index -= 1
-            if self.display.row_index < 1:
-                self.display.row_index = 1
+            if self.display.row_index < 0:
+                self.display.row_index = 0
 
     def key_down(self, channel):
         self.is_idle = False
@@ -250,10 +255,15 @@ class UI(Thread):
                 self.display.row_index += 1
                 if self.display.row_index >= len(self.message.group_cleartexts):
                     self.display.row_index = len(self.message.group_cleartexts) -1
+        elif self.display.mode == m_RF_TUNING:
+            self.display.row_index += 1
+            if self.display.row_index > 5:
+                self.display.row_index = 5
         elif self.display.mode == m_SETTINGS:
             self.display.row_index += 1
             if self.display.row_index > 4:
                 self.display.row_index = 4
+
 
     def key_left(self, channel):
         self.is_idle = False
@@ -278,28 +288,67 @@ class UI(Thread):
             self.display.col_index -= 1
             if self.display.col_index < 0:
                 self.display.col_index = 0
-        elif self.display.mode == m_SETTINGS:
+        elif self.display.mode == m_RF_TUNING:
+            if self.display.row_index == 0:
+                self.config.freq -= 0.01
             if self.display.row_index == 1:
+                self.config.bandwidth -= 1
+                if self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 62.5 #units kilohertz
+                elif self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 125 #units kilohertz
+                elif self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 250 #units kilohertz
+                elif self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 500 #units kilohertz  
+            elif self.display.row_index == 2:
+                self.config.spread_factor -= 1
+                if self.config.spread_factor < 6:
+                    self.config.spread_factor = 6
+            elif self.display.row_index == 3:
+                self.config.coding_rate -= 1
+                if self.config.coding_rate < 1:
+                    self.config.coding_rate = 1
+                if self.config.coding_rate == 1:
+                    self.config.coding_rate_eng = '4/5'
+                elif self.config.coding_rate == 2:
+                    self.config.coding_rate_eng = '4/6'
+                elif self.config.coding_rate == 3:
+                    self.config.coding_rate_eng = '4/7'
+                elif self.config.coding_rate == 4:
+                    self.config.coding_rate_eng = '4/8'
+            elif self.display.row_index == 4:
+                self.config.tx_power -= 1
+                if self.config.tx_power < 11: #LL-RXR-27
+                    self.config.tx_power = 11
+            elif self.display.row_index == 5:
+                self.config.sync_word -= 1
+                if self.config.sync_word < 0:
+                    self.config.sync_word = 0
+        elif self.display.mode == m_SETTINGS:
+            if self.display.row_index == 0:
                 self.config.airplane_mode = False
-            if self.display.row_index == 2:
+            if self.display.row_index == 1:
                 self.config.tdma_total_slots -= 1
                 if self.config.tdma_total_slots < 2: #Whats the point if not at least 2?!
                     self.config.tdma_total_slots = 2
-            elif self.display.row_index == 3:
+            elif self.display.row_index == 2:
                 self.config.tdma_slot -= 1
                 if self.config.tdma_slot < 0:
                     self.config.tdma_slot = 0
-            elif self.display.row_index == 4:
+            elif self.display.row_index == 3:
                 self.config.tx_time -= 1
                 if self.config.tx_time < 1:
                     self.config.tx_time = 1
-            elif self.display.row_index == 5:
+            elif self.display.row_index == 4:
                 self.config.tx_deadband -= 1
                 if self.config.tx_deadband < 1:
                     self.config.tx_deadband = 1
         elif self.display.mode == m_LOCK:
             if GPIO.input(iodef.PIN_KEY_ENTER) == self.active_high:
                 self.main_menu()
+
+
         
     def key_right(self, channel):
         self.is_idle = False
@@ -327,16 +376,53 @@ class UI(Thread):
             self.display.col_index += 1
             if self.display.col_index > 1:
                 self.display.col_index = 1
-        elif self.display.mode == m_SETTINGS:
+        elif self.display.mode == m_RF_TUNING:
+            if self.display.row_index == 0:
+                self.config.freq += 0.01
             if self.display.row_index == 1:
-                self.config.airplane_mode = True
+                self.config.bandwidth += 1
+                if self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 62.5 #units kilohertz
+                elif self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 125 #units kilohertz
+                elif self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 250 #units kilohertz
+                elif self.config.bandwidth == 0:
+                    self.config.bandwidth_eng = 500 #units kilohertz  
             elif self.display.row_index == 2:
-                self.config.tdma_total_slots += 1
+                self.config.spread_factor += 1
+                if self.config.spread_factor > 12:
+                    self.config.spread_factor = 12
             elif self.display.row_index == 3:
-                self.config.tdma_slot += 1
+                self.config.coding_rate += 1
+                if self.config.coding_rate > 4:
+                    self.config.coding_rate = 4
+                if self.config.coding_rate == 1:
+                    self.config.coding_rate_eng = '4/5'
+                elif self.config.coding_rate == 2:
+                    self.config.coding_rate_eng = '4/6'
+                elif self.config.coding_rate == 3:
+                    self.config.coding_rate_eng = '4/7'
+                elif self.config.coding_rate == 4:
+                    self.config.coding_rate_eng = '4/8'
             elif self.display.row_index == 4:
-                self.config.tx_time += 1
+                self.config.tx_power += 1
+                if self.config.tx_power > 26: #LL-RXR-27
+                    self.config.tx_power = 26
             elif self.display.row_index == 5:
+                self.config.sync_word += 1
+                if self.config.sync_word > 1024: 
+                    self.config.sync_word = 1024
+        elif self.display.mode == m_SETTINGS:
+            if self.display.row_index == 0:
+                self.config.airplane_mode = True
+            elif self.display.row_index == 1:
+                self.config.tdma_total_slots += 1
+            elif self.display.row_index == 2:
+                self.config.tdma_slot += 1
+            elif self.display.row_index == 3:
+                self.config.tx_time += 1
+            elif self.display.row_index == 4:
                 self.config.tx_deadband += 1
 
     #self.display.dialog_msg = "Main Dialog Msg"
@@ -453,11 +539,15 @@ class UI(Thread):
                 self.display.mode = m_STATUS
             elif self.display.row_index == 3:
                 self.display.col_index = 0
-                self.display.row_index = 1
+                self.display.row_index = 0
                 self.display.mode = m_SETTINGS
             elif self.display.row_index == 4:
-                self.display.mode = m_LOG_VIEWER
+                self.display.col_index = 0
+                self.display.row_index = 0
+                self.display.mode = m_RF_TUNING
             elif self.display.row_index == 5:
+                self.display.mode = m_LOG_VIEWER
+            elif self.display.row_index == 6:
                 self.display.dialog_cmd = cmd_SHUTDOWN
                 self.display.dialog_msg = "Shutdown?"
                 self.display.dialog_msg2 = "Are you sure?"
@@ -502,11 +592,14 @@ class UI(Thread):
             self.message.compose_msg = self.message.compose_msg[:-1]
         elif self.display.mode == m_SETTINGS:
             self.config.save_config(True)
-            self.main_menu();
+            self.main_menu()
         elif self.display.mode == m_LOG_VIEWER:
-            self.main_menu();
+            self.main_menu()
         elif self.display.mode == m_MSG_VIEWER:
-            self.main_menu();
+            self.main_menu()
+        elif self.display.mode == m_RF_TUNING:
+            self.radio.set_params(self.config.freq, self.config.bandwidth, self.config.spread_factor, self.config.coding_rate, self.config.tx_power, self.config.sync_word)
+            self.main_menu()
         elif self.display.mode == m_REG:
             if self.display.reg_stage == 1:
                 self.message.alias = self.message.alias[:-1]

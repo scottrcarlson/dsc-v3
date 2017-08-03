@@ -35,7 +35,7 @@ m_LOCK=15
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
 class Display(Thread):
-    def __init__(self, message, version, config, radio, sw_rev, heartbeat):
+    def __init__(self, message, version, config, sw_rev, heartbeat):
         Thread.__init__(self)
         self.event = Event()
         self.log = logging.getLogger()
@@ -49,7 +49,6 @@ class Display(Thread):
         self.version = version
         self.sw_rev = sw_rev
         self.message = message
-        self.radio = radio
 
     	# TODO: gracefully handle exception when OLED absent
         if self.config.hw_rev == 1:
@@ -167,78 +166,122 @@ class Display(Thread):
             elif self.mode == m_MAIN_MENU:
                 try:
                     with canvas(self.device) as draw:
-                        draw.line((121,3,124,0), fill=255)
-                        draw.line((124,0,127,3), fill=255)
-                        if (self.row_index < self.viz_min):
+                        if self.row_index != 0: #Hide Scroll Up Indicator if at top
+                            draw.line((121,3,124,0), fill=255) #Scroll Up Arrow
+                            draw.line((124,0,127,3), fill=255) #Scroll Up Arrow
+                        if self.row_index < self.viz_min:
                             self.viz_max -= self.viz_min - self.row_index
                             self.viz_min = self.row_index
-                        elif (self.row_index >= self.viz_max):
+                        elif self.row_index >= self.viz_max:
                             self.viz_max = self.row_index + 1
                             self.viz_min = self.viz_max - self.screen_row_size
                         #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
                         for i in range(0,len(scr.main_menu)):
                             draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
-                        draw.line((121,60,124,63), fill=255)
-                        draw.line((124,63,127,60), fill=255)
+                        
+                        if self.row_index != len(scr.main_menu) - 1:
+                            draw.line((121,60,124,63), fill=255) # Scroll Down Arrow
+                            draw.line((124,63,127,60), fill=255) # Scroll Down Arrow
 
                         draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '>', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
             #------[SETTINGS SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_SETTINGS:
+                viz_min = 0
+                viz_max = 4
+                screen_row_size = 4
                 try:
                     with canvas(self.device) as draw:
-                        draw.text((0, 0), "-- Network Settings --", font=self.font, fill=255)
-                        draw.text((0, 10), "Airplane Mode:" + str(self.config.airplane_mode), font=self.font, fill=255)
-                        draw.text((0, 20), "Total Nodes:" + str(self.config.tdma_total_slots), font=self.font, fill=255)
-                        draw.text((0, 30), "TDMA Slot(0-n):" + str(self.config.tdma_slot), font=self.font, fill=255)
-                        draw.text((0, 40), "TX Time(s):" + str(self.config.tx_time), font=self.font, fill=255)
-                        draw.text((0, 50), "Deadband(s):" + str(self.config.tx_deadband), font=self.font, fill=255)
-                        if self.row_index == 1:
-                            self.cursor_y = 10
-                            self.cursor_x = 12 * 6
-                        elif self.row_index == 2:
-                            self.cursor_y = 20
-                            self.cursor_x = 15 * 6
-                        elif self.row_index == 3:
-                            self.cursor_y = 30
-                            self.cursor_x = 11 * 6
-                        elif self.row_index == 4:
-                            self.cursor_y = 40
-                            self.cursor_x = 12 * 6
-                        elif self.row_index == 5:
-                            self.cursor_y = 50
-                            self.cursor_x = 14 * 6
+                        draw.text((0, 0), "Network Settings", font=self.font, fill=255)
+                        draw.line((0, 10, 80, 10), fill=255)
+
+                        if self.row_index != 0: #Hide Scroll Up Indicator if at top
+                            draw.line((121,3,124,0), fill=255) #Scroll Up Arrow
+                            draw.line((124,0,127,3), fill=255) #Scroll Up Arrow
+
+                        if self.row_index != len(scr.network_settings_menu) - 1:
+                            draw.line((121,60,124,63), fill=255) # Scroll Down Arrow
+                            draw.line((124,63,127,60), fill=255) # Scroll Down Arrow
+
+                        if self.row_index < viz_min:
+                            viz_max -= viz_min - self.row_index 
+                            viz_min = self.row_index
+                        elif self.row_index >= viz_max:
+                            viz_max = self.row_index + 1
+                            viz_min = viz_max - screen_row_size
+                        
+                        for i in range(viz_min,len(scr.network_settings_menu)):
+                            dX = len(scr.network_settings_menu[i]) * 6
+                            dY = self.row_height+( (i-viz_min) * self.row_height)
+                            if i == 0:
+                                value = self.config.airplane_mode
+                            elif i == 1:
+                                value = self.config.tdma_total_slots
+                            elif i == 2:
+                                value = self.config.tdma_slot
+                            elif i == 3:
+                                value = self.config.tx_time
+                            elif i == 4:
+                                value = self.config.tx_deadband    
+                            draw.text((0, dY), scr.network_settings_menu[i] + str(value), font=self.font, fill=255)
+                        
+                        #print "VizMin: ", viz_min, " VizMax:", viz_max, " Index:", self.row_index
+
+                        self.cursor_x = len(scr.network_settings_menu[self.row_index]) * 6
+                        self.cursor_y = self.row_height * (self.row_index + 1) - (self.row_height * viz_min)
                         if self.cursor:
                             draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
                         self.cursor = not self.cursor
+
                 except Exception as e:
                     self.log.error(str(e))
              #------[RF TUNING SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_RF_TUNING:
+                viz_min = 0
+                viz_max = 4
+                screen_row_size = 4
                 try:
                     with canvas(self.device) as draw:
-                        #draw.text((0, 0), "----- RF Settings -----", font=self.font, fill=255)
-                        draw.text((0, 0), "Freq:" + str(self.radio.freq), font=self.font, fill=255)
-                        draw.text((0, 10), "Bandwidth:" + str(self.radio.bandwidth), font=self.font, fill=255)
-                        draw.text((0, 20), "Spread Factor:" + str(self.radio.spread_factor), font=self.font, fill=255)
-                        draw.text((0, 30), "Coding Rate:" + str(self.radio.coding_rate), font=self.font, fill=255)
-                        draw.text((0, 40), "TX Power:" + str(self.radio.tx_power), font=self.font, fill=255)
-                        if self.row_index == 1:
-                            self.cursor_y = 0
-                            self.cursor_x = 5 * 6
-                        elif self.row_index == 2:
-                            self.cursor_y = 10
-                            self.cursor_x = 10 * 6
-                        elif self.row_index == 3:
-                            self.cursor_y = 20
-                            self.cursor_x = 13 * 6
-                        elif self.row_index == 4:
-                            self.cursor_y = 30
-                            self.cursor_x = 11 * 6
-                        elif self.row_index == 5:
-                            self.cursor_y = 40
-                            self.cursor_x = 9 * 6
+                        draw.text((0, 0), "RF Tuning", font=self.font, fill=255)
+                        draw.line((0, 10, 80, 10), fill=255)
+
+                        if self.row_index != 0: #Hide Scroll Up Indicator if at top
+                            draw.line((121,3,124,0), fill=255) #Scroll Up Arrow
+                            draw.line((124,0,127,3), fill=255) #Scroll Up Arrow
+
+                        if self.row_index != len(scr.rf_tuning_menu) - 1:
+                            draw.line((121,60,124,63), fill=255) # Scroll Down Arrow
+                            draw.line((124,63,127,60), fill=255) # Scroll Down Arrow
+
+                        if self.row_index < viz_min:
+                            viz_max -= viz_min - self.row_index 
+                            viz_min = self.row_index
+                        elif self.row_index >= viz_max:
+                            viz_max = self.row_index + 1
+                            viz_min = viz_max - screen_row_size
+                        
+                        for i in range(viz_min,len(scr.rf_tuning_menu)):
+                            dX = len(scr.rf_tuning_menu[i]) * 6
+                            dY = self.row_height+( (i-viz_min) * self.row_height)
+                            if i == 0:
+                                value = self.config.freq
+                            elif i == 1:
+                                value = self.config.bandwidth
+                            elif i == 2:
+                                value = self.config.spread_factor
+                            elif i == 3:
+                                value = self.config.coding_rate
+                            elif i == 4:
+                                value = self.config.tx_power
+                            elif i == 5:
+                                value = self.config.sync_word
+                            draw.text((0, dY), scr.rf_tuning_menu[i] + str(value), font=self.font, fill=255)
+                        
+                        #print "VizMin: ", viz_min, " VizMax:", viz_max, " Index:", self.row_index
+
+                        self.cursor_x = len(scr.rf_tuning_menu[self.row_index]) * 6
+                        self.cursor_y = self.row_height * (self.row_index + 1) - (self.row_height * viz_min)
                         if self.cursor:
                             draw.text((self.cursor_x, self.cursor_y), "_", font=self.font, fill=255)
                         self.cursor = not self.cursor

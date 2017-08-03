@@ -14,7 +14,6 @@ import time
 import Queue
 import logging
 
-
 class Radio(Thread):
     def __init__(self,serial_device, config, message, heartbeat):
         Thread.__init__(self)
@@ -30,13 +29,6 @@ class Radio(Thread):
 
         self.ignore_radio_irq = False
         self.radio_verbose = 0
-
-        self.freq = 902
-        self.bandwidth = 0
-        self.spread_factor = 0
-        self.coding_rate = 0
-        
-        self.sync_word = 'helloworld'
 
         self.total_recv = 0
         self.total_sent = 0
@@ -59,14 +51,15 @@ class Radio(Thread):
         GPIO.add_event_detect(iodef.PIN_RADIO_IRQ, GPIO.RISING, callback=self.check_irq, bouncetime=100)
 
         self.log.info('Initialized Radio Thread.')
-        self.log.debug("Radio Antenna Active:" + self.mc.get_antenna())
-        #params = self.mc._send_command(OPCODES['GET_RADIO_PARAMS'])
-        #print type(params)
-        #for i in range(0, len(params)):
-        #    print "Byte(",i,"): ", params[i]
-        
-        #print int(params[7])
-
+        self.log.debug("Antenna Active:" + self.mc.get_antenna())
+        self.config.freq, self.config.bandwidth, self.config.spread_factor, self.config.coding_rate, self.config.tx_power, self.config.sync_word = self.get_params()
+        self.log.debug("Freq:" + str(self.config.freq) + " hz")
+        self.log.debug("TX Power: " + str(self.config.tx_power) + " dBm")
+        self.log.debug("Bandwidth:" + str(self.config.bandwidth))
+        self.log.debug("SpreadFactor:" + str(self.config.spread_factor))
+        self.log.debug("Coding Rate:" + str(self.config.coding_rate))
+        self.log.debug("Sync Word:" + str(self.config.sync_word))
+   
     def run(self):
         self.event.wait(1)
         last_checked_tdma = 0
@@ -132,6 +125,45 @@ class Radio(Thread):
     def stop(self):
         self.log.debug("Stopping Radio Thread.")
         self.event.set()
+
+    def set_params(self,freq,bandwidth,spread_factor,coding_rate,tx_power,sync_word):
+        flags = 255
+        parm1 = 0
+        parm1 |= ((spread_factor - 6) & 0x07) << 4
+        parm1 |= ((coding_rate - 1) & 0x03) << 2
+        parm1 |= bandwidth & 0x03
+        parm2 = 0b11 # Header Enabled / CRC Enabled / IRQ not Inverted
+        preamble_syms = 6
+        parm3 = (preamble_syms >> 8) & 0xFF
+        parm4 = (preamble_syms >> 0) & 0xFF
+        parm5 = (freq >> 24) & 0xFF
+        parm6 = (freq >> 16) & 0xFF
+        parm7 = (freq >> 8) & 0xFF
+        parm8 = freq & 0xFF
+
+        params = bytearray([flags,parm1,parm2,parm3,parm4,parm5,parm6,parm7,parm8])
+        self.mc._send_command(OPCODES['SET_RADIO_PARAMS'], params)
+        self.mc._send_command(OPCODES['TX_POWER'],bytearray([tx_power]))
+        self.mc._send_command(OPCODES['SYNC_WORD_SET'],bytearray([sync_word]))
+        
+        self.mc._send_command(OPCODES['STORE_SETTINGS'])
+
+    def get_params(self):
+        params = self.mc._send_command(OPCODES['GET_RADIO_PARAMS'])
+        spread_factor = (params[0] >> 4) + 6
+        coding_rate = ((params[0] >> 2) & 0x03) + 1
+        bandwidth = params[0] & 0x03
+        freq = (params[4] << 24)
+        freq |= (params[5] << 16)
+        freq |= (params[6] << 8)
+        freq |= (params[7])
+        header_enabled = (params[1] & 0b001 == 1)
+        crc_enabled = (params[1] & 0b010 == 2)
+        iq_inverted = (params[1] & 0b100 == 4) # 1U << 2U
+        preamble_syms = ((params[2] << 8) | params[3])
+        tx_power = self.mc._send_command(OPCODES['TX_POWER_GET'])[0]
+        sync_word = self.mc._send_command(OPCODES['SYNC_WORD_GET'])[0]
+        return freq, bandwidth, spread_factor, coding_rate, tx_power, sync_word
 
     def signal_quality(self,rssi):
         #Look at these ratings, are they reasonable?
