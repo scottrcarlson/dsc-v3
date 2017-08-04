@@ -18,6 +18,20 @@
 
 [Bill of Materials]
 ------------------
+(Prices can be optimized based on source and quantity)
+Total Estimated price $85-$100
+
+$5 RPi Zero 
+$13 DS3231 Precision RTC
+$33 LL-RXR-27 LoRa Transceiver
+$23 OLED Bonnet
+$3 SMA to u.Fl Adapter Cable
+$8 Antenna 1/2 Wave 3/5dbi
+
+**Yet to be sourced
+*RGB Led
+*Speaker/Buzzer
+*Vibration Motor (Eccentric Mass)
 
 [Assembly / Wiring]
 ------------------
