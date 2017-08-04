@@ -100,7 +100,7 @@ class UI(Thread):
                     if dialog_time == 0:
                         dialog_time = time.time()
                     if time.time() - dialog_time > self.dialog_delay:
-                        dialog_time = 0
+                        dialog_time = time.time()
                         self.display.dialog_confirmed = True
 
                 try:
@@ -188,6 +188,7 @@ class UI(Thread):
         self.display.row_index = 0
         self.display.mode = m_MAIN_MENU
 
+#---------------------------------[KEY UP]-------------------------------------
     def key_up(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
@@ -224,6 +225,7 @@ class UI(Thread):
             if self.display.row_index < 0:
                 self.display.row_index = 0
 
+#---------------------------------[KEY DOWN]-------------------------------------
     def key_down(self, channel):
         self.is_idle = False
         ##print "pressed DOWN Key."
@@ -265,6 +267,7 @@ class UI(Thread):
                 self.display.row_index = 4
 
 
+#---------------------------------[KEY LEFT]-------------------------------------
     def key_left(self, channel):
         self.is_idle = False
         ##print "pressed LEFT Key."
@@ -290,17 +293,14 @@ class UI(Thread):
                 self.display.col_index = 0
         elif self.display.mode == m_RF_TUNING:
             if self.display.row_index == 0:
-                self.config.freq -= 0.01
+                self.config.freq -= 250000
+                if self.config.freq < 902250000:
+                    self.config.freq = 902250000
             if self.display.row_index == 1:
                 self.config.bandwidth -= 1
-                if self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 62.5 #units kilohertz
-                elif self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 125 #units kilohertz
-                elif self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 250 #units kilohertz
-                elif self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 500 #units kilohertz  
+                if self.config.bandwidth < 0:
+                    self.config.bandwidth = 0
+                self.config.update_bandwidth_eng()
             elif self.display.row_index == 2:
                 self.config.spread_factor -= 1
                 if self.config.spread_factor < 6:
@@ -309,14 +309,7 @@ class UI(Thread):
                 self.config.coding_rate -= 1
                 if self.config.coding_rate < 1:
                     self.config.coding_rate = 1
-                if self.config.coding_rate == 1:
-                    self.config.coding_rate_eng = '4/5'
-                elif self.config.coding_rate == 2:
-                    self.config.coding_rate_eng = '4/6'
-                elif self.config.coding_rate == 3:
-                    self.config.coding_rate_eng = '4/7'
-                elif self.config.coding_rate == 4:
-                    self.config.coding_rate_eng = '4/8'
+                self.config.update_coding_rate_eng()
             elif self.display.row_index == 4:
                 self.config.tx_power -= 1
                 if self.config.tx_power < 11: #LL-RXR-27
@@ -349,7 +342,7 @@ class UI(Thread):
                 self.main_menu()
 
 
-        
+#---------------------------------[KEY RIGHT]-------------------------------------
     def key_right(self, channel):
         self.is_idle = False
         ##print "pressed RIGHT Key."
@@ -378,17 +371,14 @@ class UI(Thread):
                 self.display.col_index = 1
         elif self.display.mode == m_RF_TUNING:
             if self.display.row_index == 0:
-                self.config.freq += 0.01
+                self.config.freq += 250000
+                if self.config.freq > 927750000:
+                    self.config.freq = 927750000
             if self.display.row_index == 1:
                 self.config.bandwidth += 1
-                if self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 62.5 #units kilohertz
-                elif self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 125 #units kilohertz
-                elif self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 250 #units kilohertz
-                elif self.config.bandwidth == 0:
-                    self.config.bandwidth_eng = 500 #units kilohertz  
+                if self.config.bandwidth > 3:
+                    self.config.bandwidth = 3
+                self.config.update_bandwidth_eng()
             elif self.display.row_index == 2:
                 self.config.spread_factor += 1
                 if self.config.spread_factor > 12:
@@ -397,14 +387,7 @@ class UI(Thread):
                 self.config.coding_rate += 1
                 if self.config.coding_rate > 4:
                     self.config.coding_rate = 4
-                if self.config.coding_rate == 1:
-                    self.config.coding_rate_eng = '4/5'
-                elif self.config.coding_rate == 2:
-                    self.config.coding_rate_eng = '4/6'
-                elif self.config.coding_rate == 3:
-                    self.config.coding_rate_eng = '4/7'
-                elif self.config.coding_rate == 4:
-                    self.config.coding_rate_eng = '4/8'
+                self.config.update_coding_rate_eng()
             elif self.display.row_index == 4:
                 self.config.tx_power += 1
                 if self.config.tx_power > 26: #LL-RXR-27
@@ -425,16 +408,7 @@ class UI(Thread):
             elif self.display.row_index == 4:
                 self.config.tx_deadband += 1
 
-    #self.display.dialog_msg = "Main Dialog Msg"
-    #self.display.dialog_msg2 = "Line2"
-    #self.display.dialog_msg3 = "Line3"
-    #self.display.dialog_cmd = cmd_SOME_TASK_TO_PERFORM 
-    #self.display.row_index = 0 #Track Menu Item Selected
-    #self.display.col_index = 0 #Track Menu Item Selected
-    #self.display.dialog_task_done = False #Task Complete Flag
-    #self.display.mode = m_DIALOG_TASK #Next Mode to Enter
-    #self.display.dialog_next_mode = m_MAIN_MENU #Where to go after the next mode
-                    
+#---------------------------------[KEY ENTER]-------------------------------------                    
     def key_enter(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
@@ -482,6 +456,8 @@ class UI(Thread):
                     self.message.compose_msg = self.message.compose_msg + keyboard[index:index+1]
             else:
                 if self.display.col_index == 0:
+                    self.display.dialog_msg = ""
+                    self.display.dialog_msg2 = ""
                     self.display.dialog_msg3 = "  Sending Message..."
                     self.message.process_composed_msg(self.message.compose_msg)
                     self.display.row_index = 0
@@ -584,7 +560,6 @@ class UI(Thread):
         elif self.display.mode == m_SPLASH:
             self.reg()
         elif self.display.mode == m_MAIN_MENU:
-            #self.display.mode = m_STATUS
             pass
         elif self.display.mode == m_STATUS:
             self.display.mode = m_MAIN_MENU
@@ -598,7 +573,12 @@ class UI(Thread):
         elif self.display.mode == m_MSG_VIEWER:
             self.main_menu()
         elif self.display.mode == m_RF_TUNING:
-            self.radio.set_params(self.config.freq, self.config.bandwidth, self.config.spread_factor, self.config.coding_rate, self.config.tx_power, self.config.sync_word)
+            self.radio.set_params(self.config.freq, 
+                                  self.config.bandwidth, 
+                                  self.config.spread_factor, 
+                                  self.config.coding_rate, 
+                                  self.config.tx_power, 
+                                  self.config.sync_word)
             self.main_menu()
         elif self.display.mode == m_REG:
             if self.display.reg_stage == 1:
@@ -612,13 +592,3 @@ class UI(Thread):
                 self.main_menu()
         else:
             self.lock()
-            #self.display.row_index = 0
-            #self.display.col_index = 0
-            #self.display.dialog_next_mode = m_MAIN_MENU
-            #self.display.mode = m_LOCK
-
-
-
-
-
-

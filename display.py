@@ -267,11 +267,11 @@ class Display(Thread):
                             if i == 0:
                                 value = self.config.freq
                             elif i == 1:
-                                value = self.config.bandwidth
+                                value = self.config.bandwidth_eng
                             elif i == 2:
                                 value = self.config.spread_factor
                             elif i == 3:
-                                value = self.config.coding_rate
+                                value = self.config.coding_rate_eng
                             elif i == 4:
                                 value = self.config.tx_power
                             elif i == 5:

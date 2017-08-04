@@ -41,6 +41,27 @@ class Config(object):
         else:
             self.save_config(False)
 
+
+    def update_bandwidth_eng(self): #Units kHz
+        if self.bandwidth == 0:
+            self.bandwidth_eng = "62.5 kHz"
+        elif self.bandwidth == 1:
+            self.bandwidth_eng = "125 kHz"
+        elif self.bandwidth == 2:
+            self.bandwidth_eng = "250 kHz"
+        elif self.bandwidth == 3:
+            self.bandwidth_eng = "500 kHz"
+
+    def update_coding_rate_eng(self): 
+        if self.coding_rate == 1:
+            self.coding_rate_eng = "4/5"
+        elif self.coding_rate == 2:
+            self.coding_rate_eng = "4/6"
+        elif self.coding_rate == 3:
+            self.coding_rate_eng = "4/7"
+        elif self.coding_rate == 4:
+            self.coding_rate_eng = "4/8"
+
     def gen_new(self):
         self.cfg = None
         self.save_config(False)
@@ -50,31 +71,16 @@ class Config(object):
             if not is_exist:
                 print "Generating config file."
                 self.cfg.add_section('Network')
-                #self.cfg.add_section('RF')
             try:
-                if not self.cfg.has_section('Network'):
-                    self.cfg.add_section('Network')
                 self.cfg.set('Network','Hardware_Rev',self.hw_rev)
                 self.cfg.set('Network','TDMA_Slot',self.tdma_slot)
                 self.cfg.set('Network','TDMA_Total_Slots',self.tdma_total_slots)
                 self.cfg.set('Network','TX_Time',self.tx_time)
                 self.cfg.set('Network','TX_Deadband',self.tx_deadband)
                 self.cfg.set('Network','Airplane_Mode',self.airplane_mode)
+                self.cfg.write(cfgfile)
             except Exception as e:
                 self.log.error(str(e))
-
-            #try:
-            #    if not self.cfg.has_section('RF'):
-            #        self.cfg.add_section('RF')
-            #    self.cfg.set('RF','Freq',self.freq)
-            #    self.cfg.set('RF','Bandwidth',self.bandwidth)
-            #    self.cfg.set('RF','Spread_Factor',self.spread_factor)
-            #    self.cfg.set('RF','Coding_Rate',self.coding_rate)
-            #    self.cfg.set('RF','Tx_Power',self.tx_power)
-            #    #self.cfg.set('RF','Sync_Word',self.sync_word)
-            #    self.cfg.write(cfgfile)
-            #except Exception as e:
-            #    self.log.error(str(e))
 
     def load_config(self):
         try:
@@ -85,12 +91,5 @@ class Config(object):
             self.tx_time = self.cfg.getint("Network","TX_Time")
             self.tx_deadband = self.cfg.getint("Network","TX_Deadband")
             self.airplane_mode = self.cfg.getboolean("Network","Airplane_Mode")
-
-            #self.freq = self.cfg.getint("RF","Freq")
-            #self.bandwidth = self.cfg.getint("RF","Bandwidth")
-            #self.spread_factor = self.cfg.getint("RF","Spread_Factor")
-            #self.coding_rate = self.cfg.getint("RF","Coding_Rate")
-            #self.tx_power = self.cfg.getint("RF","Tx_Power")
-            #self.sync_word = self.cfg.getstring("RF","Sync_Word")
         except Exception as e:
             self.log.error(str(e))

@@ -59,6 +59,9 @@ class Radio(Thread):
         self.log.debug("SpreadFactor:" + str(self.config.spread_factor))
         self.log.debug("Coding Rate:" + str(self.config.coding_rate))
         self.log.debug("Sync Word:" + str(self.config.sync_word))
+
+        self.config.update_bandwidth_eng()
+        self.config.update_coding_rate_eng()
    
     def run(self):
         self.event.wait(1)

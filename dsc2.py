@@ -134,8 +134,8 @@ if __name__ == "__main__":
                   log.error("Message Thread seems to be dead.")
 
             elif time.time() - heartbeat_time < 0:
-                    self.log.warn("Time changed to past. Re-initializing.")
+                    log.warn("Time changed to past. Re-initializing.")
                     heartbeat_time = time.time()
         except Exception as e:
-                self.log.error(str(e))
+                log.error(str(e))
         sleep(1)
