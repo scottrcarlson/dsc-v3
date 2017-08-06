@@ -8,7 +8,7 @@ from time import sleep
 from radio import Radio
 from display import Display
 from ui import UI
-#from gps import Gps
+from gps import Gps
 import iodef
 from message import Message
 from config import Config
@@ -33,7 +33,7 @@ heartbeat_message = Queue.Queue()
 def signal_handler(signal, frame): #nicely shut things down
     log.info("[ " + str(signal) + " ] DSCv3 received shutdown signal.")
     radio.stop()
-    #gps.stop()
+    gps.stop()
     ui.stop()
     message.stop()
     display.stop()
@@ -101,8 +101,10 @@ if __name__ == "__main__":
     radio.start()
 
     #add some logic here to spawn if we have GPS unit
-    #gps = Gps()
-    #gps.start()
+
+    gps = Gps()
+    gps.start()
+
 
     display = Display(message, version, config, revision, heartbeat_display)
     display.start()

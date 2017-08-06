@@ -562,9 +562,12 @@ class UI(Thread):
         elif self.display.mode == m_MAIN_MENU:
             pass
         elif self.display.mode == m_STATUS:
-            self.display.mode = m_MAIN_MENU
+            #self.display.mode = m_MAIN_MENU
+            self.main_menu()
         elif self.display.mode == m_COMPOSE:
             self.message.compose_msg = self.message.compose_msg[:-1]
+        elif self.display.mode == m_COMPOSE_MENU:
+            self.main_menu()
         elif self.display.mode == m_SETTINGS:
             self.config.save_config(True)
             self.main_menu()
@@ -591,4 +594,4 @@ class UI(Thread):
             if GPIO.input(iodef.PIN_KEY_LEFT) == self.active_high:
                 self.main_menu()
         else:
-            self.lock()
+            self.main_menu()
