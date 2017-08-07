@@ -18,20 +18,22 @@
 
 [Bill of Materials]
 ------------------
+(Work in Progress)
 (Prices can be optimized based on source and quantity)
-Total Estimated price $85-$100
+Total Estimated price $85-$120)
 
-$5 RPi Zero 
-$13 DS3231 Precision RTC
-$33 LL-RXR-27 LoRa Transceiver
-$23 OLED Bonnet
-$3 SMA to u.Fl Adapter Cable
-$8 Antenna 1/2 Wave 3/5dbi
-
-**Yet to be sourced
-*RGB Led
-*Speaker/Buzzer
-*Vibration Motor (Eccentric Mass)
+* $5 RPi Zero (Wherever you can get one)
+* $13 DS3231 Precision RTC https://www.adafruit.com/product/3013
+* $33 LL-RXR-27 LoRa Transceiver http://www.futureelectronics.com/en/Technologies/Product.aspx?ProductID=LLRXR27915SYMALINKLABS5062354&IM=0
+* $23 OLED Bonnet https://www.digikey.com/products/en?mpart=3531&v=1528
+* $3 SMA to u.Fl Adapter Cable https://www.amazon.com/2pcs-Female-Pigtail-Hirose-0-81mm/dp/B00UTT8842
+* $13 Antenna 1/2 Wave 5dBi https://www.amazon.com/TECHTOO-700-2600Mhz-Directional-Connector-Wireless/dp/B00VV63WEI/ref=sr_1_1?ie=UTF8&qid=1502143910&sr=8-1&keywords=techtoo
+* OR
+* $7 Antenna 1/2 Wave 5dBi https://www.amazon.com/915Mhz-antenna-direction-folding-Shipping/dp/B072QB7LRJ/ref=sr_1_2?s=electronics&ie=UTF8&qid=1502143982&sr=1-2&keywords=900mhz+antenna+sma
+* RGB Led (tbd)
+* Vibration (Disc Motor) (tbd)
+* LiPo 2200mAh https://www.adafruit.com/product/328
+* LiPo Charging/Switchover https://www.adafruit.com/product/1944
 
 [Assembly / Wiring]
 ------------------
