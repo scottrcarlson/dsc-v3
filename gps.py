@@ -42,7 +42,7 @@ class Gps(Thread):
 		self.event = Event()
 		self.log = logging.getLogger()
 		self.gps_enable = True # Expose to UI / Save Persistently
-		self.gps_avail = False
+		self.gps_avail = True  # First Pass will set this correctly and log results once. 
 		self.gps_quality = 0
 		self.num_sats = 0
 		self.gps_timestamp = 0
@@ -60,44 +60,47 @@ class Gps(Thread):
 					try:
 						com = serial.Serial(GPS_SERIAL_DEVICE, timeout=5.0)
 					except serial.SerialException:
-						self.log.warning("GPS device missing")
+						if self.gps_avail: # Falling Edge will Log Missing
+							self.log.warning("GPS device missing")
 						self.gps_avail = False
 						time.sleep(15.0)
 					else:
 						self.log.warning("GPS device detected")
+				else:
+					try:
+						data = com.read()
+						for msg in reader.next(data):
+							parsed = pynmea2.parse(str(msg))
+							#print parsed
+							try:
+								if isinstance(parsed, pynmea2.types.talker.GGA):
+									self.gps_quality = parsed.gps_qual
+									self.num_sats = parsed.num_sats
+									if self.gps_quality > 0 and self.gps_quality < 7:
+										self.gps_avail = True
+										self.log.debug("quality:" + str(self.gps_quality) + " #sats:" + str(self.num_sats))
+										self.gps_timestamp = parsed.timestamp
+										self.lat = str(parsed.latitude) + str(parsed.lat_dir)
+										self.long = str(parsed.longitude).replace("-", "") + str(parsed.lon_dir)
+										self.alt = str(parsed.altitude)
+										self.alt_unit = str(parsed.altitude_units)
+										self.log.debug("timestamp:" + str(self.gps_timestamp))
+										
+										# Need ZDA sentences! If we get date we can set our rtcs
+										# my test unit does not spout ZDA by default, looking into this...
 
-				try:
-					data = com.read()
-					for msg in reader.next(data):
-						parsed = pynmea2.parse(str(msg))
-						try:
-							if isinstance(parsed, pynmea2.types.talker.GGA):
-								self.gps_quality = parsed.gps_qual
-								self.num_sats = parsed.num_sats
-								if self.gps_quality > 0 and self.gps_quality < 7:
-									self.gps_avail = True
-									self.log.debug("quality:" + str(self.gps_quality) + " #sats:" + str(self.num_sats))
-									self.gps_timestamp = parsed.timestamp
-									self.lat = str(parsed.latitude) + str(parsed.lat_dir)
-									self.long = str(parsed.longitude).replace("-", "") + str(parsed.lon_dir)
-									self.alt = str(parsed.altitude)
-									self.alt_unit = str(parsed.altitude_units)
-									self.log.debug("timestamp:" + str(self.gps_timestamp))
-									# log lat+lon that can be parsed by http://maps.google.com
-									self.log.debug("lat long:" + self.lat + " " + self.long + " alt:" +
-												   self.alt + "(" + self.alt_unit + ")")
-						except Exception as e:
-							self.gps_avail = False
-							self.log.error(str(e))
-
-						time.sleep(1)
-				except Exception as e:
-					# Force Reconnect 
-					com = None
-					self.gps_avail = False
-					self.log.error("GPS device lost.")
-			else:
-				time.sleep(10)
+										# log lat+long that can be parsed by http://maps.google.com
+										self.log.debug("lat long:" + self.lat + " " + self.long + " alt:" +
+													   self.alt + "(" + self.alt_unit + ")")
+							except Exception as e:
+								self.gps_avail = False
+								self.log.error(str(e))
+					except Exception as e:
+						# Force Reconnect 
+						com = None
+						self.gps_avail = False
+						self.log.error("GPS device lost.")
+			time.sleep(10)
 
 	def stop(self):
 		self.log.info("Stopping GPS Thread.")
