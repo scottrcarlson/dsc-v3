@@ -1,61 +1,132 @@
-# Wiring Documentation for DSC v2
+# Wiring and Assembly Documentation for DSC v3
+
+
+Pre-Assembly
+1. Make Micro USB Harness Cable
+2. Wire Leads onto
+	- RTC
+	- RADIO
+	- POWER BOARD + Power Switch
+	- RGB LED
+	- MOTOR and Driver
+	- Tilt Sensor
+3. Soldier Header to PI Zero
+3. Wire RTC to PI
+4. Wire Power Board to PI
+5. Wire Radio to PI
+6. Power on Test. Check for OLED+RTC+Radio+Power functionality
+7. Wire RGB Led to PI
+8. Wire Tilt Sensor to PI
+9. Wire Motor/Driver to PI
+10. Full System Test (Power on and test all components)
+
+Final Assembly
+1. Place Power Switch and Glue
+2. Place Motor and Glue
+3. Place USB a Female jack and Glue
+4. Place RGB Led
+5. Slide Pi+OLED Into Slot
+6. Place Power Board in Slot
+7. Place Radio In Slot
+8. Find a Spot for the tilt sensor
+9. Place RTC (w RTC Battery) into slot
+10. Final Power On Test
+11. Arrange Wires so they do not interfere with cap
+12. Engage Cap
+13. Engage Bezel and Button Caps
 
 Raspberry Pi Zero
 *Board Pin Numbers Used
 -------------------------------------
-PIN 7  (I)  --> Radio IRQ
+PIN 38  (I)  --> Radio IRQ
 PIN 40 (O)  --> Radio Reset
 PIN 11 (O)  --> OLED Reset
 PIN 33 (I)  --> Key Up
-PIN 37 (I)  --> Key Down
-PIN 29 (I)  --> Key Left
-PIN 38 (I)  --> Key Right
-PIN 36 (I)  --> Key Enter
-PIN 35 (I)  --> Key Back
+PIN 15 (I)  --> Key Down
+PIN 13 (I)  --> Key Left
+PIN 16 (I)  --> Key Right
+PIN 31 (I)  --> Key Enter
+PIN 29 (I)  --> Key Back
+PIN 7  (I)  --> Key Extra
 PIN 8  (TX) --> Radio RX)
 PIN 10 (RX) --> Radio TX)
 PIN 3  (I2C SDA) --> SDA (OLED / RTC)
 PIN 5  (I2C SCL) --> SCL (OLED / RTC)
-PIN 1, 17 --> 3v3 (Used to Power Radio, OLED, Keypad and RTC)
+PIN 37 (I) --> Low Battery
+PIN 32 (I) --> Tilt Sensor
+PIN 18 (O) --> Vibration Motor
+PIN 33 (O) --> Red Status LED
+PIN 36 (O) --> Green Status LED
+PIN 35 (O) --> Blue Status LED
+PIN 1, 17 --> 3v3 (Used to Power Radio and RTC)
 PIN GND   --> Ground all Components
 --------------------------------------
 
-Keypad (IO Board) (J1)
+POWER BOARD (PowerBoost 500 Charger)
 ---------------
-PIN 1 (Key Up)    --> (Pi Zero PIN 33)
-PIN 2 (Key Right) --> (Pi Zero PIN 38)
-PIN 3 (Key Enter) --> (Pi Zero PIN 36)
-PIN 4 (Key Down)  --> (Pi Zero PIN 37)
-PIN 5 (Key Back)  --> (Pi Zero PIN 35)
-PIN 6 (Key Left)  --> (Pi Zero PIN 29)
-PIN 7 (GND)       --> (Pi Zero GND)
-PIN 8 (3V3)       --> (Pi Zero 3V3)
+EN      --> Power Switch 
+GND     --> Power Switch
+LB      --> Low Battery (PI PIN 37) [length: 3.5in]
+VCC out --> 5v VCC (PI PIN 2)       [length: 3.3in] 26AWG
+GND     --> (PI PIN 6)              [length: 3.3in] 26AWG
 ---------------
 
-OLED
---------------
-SDA --> (Pi Zero PIN 3)
-SCL --> (Pi Zero PIN 5)
-3v3 --> (Pi Zero 3v3)
-GND --> (Pi Zero GND)
-RST --> (Pi Zero PIN 
---------------
+TILT SWITCH
+---------------
+LEG1 --> PI GPIO 32	[length: 2 in]
+LEG2 --> PI GND 30  [""]
+---------------
+
+POWER SWITCH
+---------------
+LEG1 --> POWER BOARD (EN PIN) [length: 2.2 in]
+LEG2 --> POWER BOARD (GND)	  [""]
+---------------
+
+uUSB to USBA Female Harness
+---------------
+5v  uUSB --> 5v USB A  [length: 2.5in]
+GND uUSB --> GND USB A [""]
+D+  uUSB --> D+ USB A  [""]
+D-  uUSB --> D- USB A  [""]
+---------------
+
+VIBRATING MOTOR
+*rough notes for wire lengths (dead pin style)
+extend motor leads by 2.5in
+---------------
+MOT+          --> PI PIN 4
+MOT-          --> NPN Collector
+DIODE         --> FROM MOT+ to MOT-
+NPN_BASE 	  --> Resistor 220ohm --> PI PIN 18
+NPN_COLLECTOR --> PI PIN 20
+---------------
+
+RGB LED
+*Series Resistor Sized to allow each LED to draw approx 2.5mA
+---------------
+CATHODE --> PI PIN 39 							 [length: 3.5 in]
+R_ANODE --> PI GPIO 33 (Series Resistor 470ohms) [""]
+G_ANODE --> PI GPIO 36 (Series Resistor 220ohms) [""]
+B_ANODE --> PI GPIO 35 (Series Resistor 220ohms) [""]
+---------------
 
 RTC
 ---------------
-SDA --> (Pi Zero PIN 3)
-SCL --> (Pi Zero PIN 5)
-3v3 --> (Pi Zero 3v3)
-GND --> (Pi Zero GND)
+SDA --> (Pi Zero PIN 3) [length: 2.5 in] * I think this can be shortened
+SCL --> (Pi Zero PIN 5) [""]
+3v3 --> (Pi Zero PIN 1) [""]
+GND --> (Pi Zero PIN 9) [""]
 ---------------
 
 RADIO
 ---------------
-PIN 5  (3v3)   --> (Pi Zero 3v3)
-PIN 25 (GND)   --> (Pi Zero GND)
-PIN 23 (RX)    --> (Pi Zero PIN 8)
-PIN 24 (TX)    --> (Pi Zero PIN 10)
-PIN 7  (Reset) --> (Pi Zero PIN 40)  
+PIN 5  (3v3)   --> (Pi Zero PIN 17) [length: 3.6 in]
+PIN 25 (GND)   --> (Pi Zero PIN 14) [length: 3.5 in]
+PIN 23 (RX)    --> (Pi Zero PIN 8)  [length: 3.5 in]
+PIN 24 (TX)    --> (Pi Zero PIN 10) [length: 3.5 in]
+PIN 7  (Reset) --> (Pi Zero PIN 40) [length: 3.5 in]
+PIN 8  (IRQ)   --> (Pi Zero PIN 38) [length: 3.6 in] 
 ---------------
 
 
