@@ -195,6 +195,8 @@ class Radio(Thread):
         else:
             if not self.config.airplane_mode:
                 if len(received_data) > 0:
+                    #GPIO.output(iodef.PIN_LED_RED, True)
+                    iodef.PWM_LED_RED.ChangeDutyCycle(5)
                     self.update_stats = True
                     msg = received_data[3:]
                     self.total_recv += 1
@@ -205,7 +207,8 @@ class Radio(Thread):
                     if self.message.node_registered:
                         self.message.radio_inbound_queue.put_nowait((rssi,snr,msg))
                     sleep(0.15)
-
+                    #GPIO.output(iodef.PIN_LED_RED, False)
+                    iodef.PWM_LED_RED.ChangeDutyCycle(0)
         finally:
             self.is_check_inbound = False
 
@@ -221,9 +224,11 @@ class Radio(Thread):
     def process_outbound_msg(self):
         if not self.config.airplane_mode:
             outbound_data = ''
+            isbeacon = False
             try:
                 outbound_data = self.message.radio_beacon_queue.get_nowait()
                 self.log.debug("Sending Beacon: " + str(self.message.radio_beacon_queue.qsize()))
+                isbeacon = True
             except Queue.Empty:
                 try:
                     outbound_data = self.message.radio_outbound_queue.get_nowait()
@@ -232,6 +237,13 @@ class Radio(Thread):
                 except Queue.Empty:
                     pass
             if outbound_data != '':
+                if isbeacon:
+                    iodef.PWM_LED_BLUE.ChangeDutyCycle(5)
+                    #GPIO.output(iodef.PIN_LED_BLUE, True)
+                else:
+                    iodef.PWM_LED_GREEN.ChangeDutyCycle(5)
+                    #GPIO.output(iodef.PIN_LED_GREEN, True)
+    
                 self.is_check_outbound = True
                 try:
                     r = self.mc._send_command(OPCODES['PKT_SEND_QUEUE'], outbound_data)
@@ -247,6 +259,10 @@ class Radio(Thread):
 
                     sleep(0.025)
                 self.update_stats = True
+                iodef.PWM_LED_GREEN.ChangeDutyCycle(0)
+                iodef.PWM_LED_BLUE.ChangeDutyCycle(0)
+                #GPIO.output(iodef.PIN_LED_GREEN, False)
+                #GPIO.output(iodef.PIN_LED_BLUE, False)
 
     def check_irq(self,channel):
         if not self.ignore_radio_irq:
