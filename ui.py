@@ -89,6 +89,8 @@ class UI(Thread):
         idle_time = 0
         while not self.event.is_set():
             try:
+                
+
                 if time.time() - heartbeat_time > 5:
                     heartbeat_time = time.time()
                     if self.heartbeat.qsize() == 0:
@@ -102,6 +104,7 @@ class UI(Thread):
                     if time.time() - dialog_time > self.dialog_delay:
                         dialog_time = time.time()
                         self.display.dialog_confirmed = True
+                
 
                 try:
                     if time.time() - idle_time > 15:
