@@ -16,7 +16,7 @@ from crypto import Crypto
 import subprocess
 import logging
 import Queue
-
+import RPi.GPIO as GPIO
 version = "v0.3.5"
 revision = "?"
 isRunning = True            #Main Thread Control Bit
@@ -84,24 +84,15 @@ if __name__ == "__main__":
         log.error("REV file missing.")
 
     #log.debug("hg rev: " + revision)
-    
+  
     config = Config()
-    
-    if config.hw_rev == 1:
-        iodef.init()
-    else:
-        iodef.initv3()
-
+    iodef.init()
     crypto = Crypto()
-
     message = Message(crypto, config,heartbeat_message)
     message.start()
-
     radio = Radio("/dev/serial0",config, message, heartbeat_radio)
     radio.start()
-
     #add some logic here to spawn if we have GPS unit
-
     gps = Gps()
     gps.start()
 
@@ -113,11 +104,29 @@ if __name__ == "__main__":
     ui.start()
     ui.splash()
 
+    """
+    GPIO.output(iodef.PIN_MOTOR_VIBE, True)
+    sleep(0.3)
+    GPIO.output(iodef.PIN_MOTOR_VIBE, False)
+    sleep(0.1)
+    GPIO.output(iodef.PIN_MOTOR_VIBE, True)
+    sleep(0.3)
+        GPIO.output(iodef.PIN_MOTOR_VIBE, False)
+    """
     heartbeat_time = time.time()
+
     while isRunning:
         try:
             if time.time() - heartbeat_time > 30:
                 heartbeat_time = time.time()
+
+                if not GPIO.input(iodef.PIN_NOT_LOW_BATT):
+                    log.info("Low Battery")
+                    log.info("Shutting the system down in 60 seconds.")
+                if GPIO.input(iodef.PIN_TILT):
+                    log.info("Tilted.")
+                else:
+                    log.info("Not Tilted.")
                 try:
                     packet = heartbeat_ui.get_nowait()
                 except Queue.Empty: # Thread possibly dead, start re-covery timer and log
@@ -141,3 +150,6 @@ if __name__ == "__main__":
         except Exception as e:
                 log.error(str(e))
         sleep(1)
+    iodef.PWM_LED_RED.stop()
+    iodef.PWM_LED_GREEN.stop()
+    iodef.PWM_LED_BLUE.stop()
