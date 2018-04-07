@@ -7,7 +7,9 @@ import logging
 import struct
 import binascii
 import datetime
-
+import RPi.GPIO as GPIO
+import iodef
+from time import sleep
 # Message thread is responsible for producing and consuming inbound/outbound radio packets via Queues
 # Perodically fill outbound queue with packets on the repeat list
 # Processing Packets / Validating / De-Duping       
@@ -126,7 +128,7 @@ class Message(Thread):
 
         #self.log.debug("Spare size:     [" + str(len(spare)) + "]")
         #self.log.debug("author size:     " + str(len(author)))
-        self.log.debug("Encrypting msg for /group/")
+        #self.log.debug("Encrypting msg for /group/")
         group_cipher = self.crypto.encrypt(self.group_key,group_cleartext)
         #self.log.debug("group_cleartext: " + group_cleartext)
         #self.log.debug("group_cipher:     %s (%d)" % (binascii.hexlify(group_cipher), len(group_cipher)))
@@ -140,7 +142,7 @@ class Message(Thread):
         # Total 240 bytes OTA mesage cipher
         timestamp = struct.pack(">I",time.time()) 
         ttl = struct.pack(">I",self.packet_ttl)
-        self.log.debug("Encrypting packet for /network/")
+        #self.log.debug("Encrypting packet for /network/")
 
         if is_beacon:
             msg_type = 'B'
@@ -152,12 +154,13 @@ class Message(Thread):
         ota_cipher = self.crypto.encrypt(self.network_key, network_plaintext)
 
         if not is_beacon:
-            self.log.debug("Adding this to repeat_msg_list: %s (%d)" % (binascii.hexlify(ota_cipher), len(ota_cipher)))
+            self.log.debug("Adding unique msg to repeat list.")
+            #self.log.debug("Adding this to repeat_msg_list: %s (%d)" % (binascii.hexlify(ota_cipher), len(ota_cipher)))
             self.repeat_msg_list.append(ota_cipher)
             self.network_plaintexts.append(network_plaintext)
             self.process_group_messages()
         else:
-            self.log.debug("Beacon Added to Queue.")
+            #self.log.debug("Beacon Added to Queue.")
             self.radio_beacon_queue.queue.clear()
             self.radio_beacon_queue.put_nowait(ota_cipher)
 
@@ -213,7 +216,13 @@ class Message(Thread):
                             #self.log.debug("Packet ID:     " + packet_id)
                             #self.log.debug("Packet Spare: [" + packet_spare + "]")
                             #self.log.debug("Group Msg:     " + group_msg)
-                            
+                            GPIO.output(iodef.PIN_MOTOR_VIBE, True)
+                            sleep(0.3)
+                            GPIO.output(iodef.PIN_MOTOR_VIBE, False)
+                            sleep(0.3)
+                            GPIO.output(iodef.PIN_MOTOR_VIBE, True)
+                            sleep(0.3)
+                            GPIO.output(iodef.PIN_MOTOR_VIBE, False)
                                 
                             if network_plaintext not in self.network_plaintexts:
                                 self.network_plaintexts.append(network_plaintext)
@@ -223,7 +232,7 @@ class Message(Thread):
                     if 'DSC3' in group_cleartext:
                         packet_author = group_cleartext[:8].strip()
                         self.recvd_beacons[packet_author] = (packet_sent_time, rf_rssi, rf_snr)
-                        self.log.debug("Beacon received. Alias: '" + packet_author + "' RSSI:" + str(rf_rssi) + " SNR:" + str(rf_snr))
+                        self.log.debug("Beacon recv from '" + packet_author + "' RSSI:" + str(rf_rssi) + " SNR:" + str(rf_snr))
                 else:
                     self.log.warn("Unknown Msg Type: " + group_cleartext + " MsgType: " + msg_type)
             else:
