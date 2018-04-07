@@ -10,56 +10,32 @@ import RPi.GPIO as GPIO
 # Pins 3 and 5 are used for I2C communication with the OLED and RTC
 # Pins 8 and 10 are used for serial communication with the radio
 
-#--[Hardware Rev 1]
-PIN_RADIO_IRQ   = 7
-PIN_RADIO_RESET = 40 
-PIN_OLED_RESET  = 11 
-PIN_KEY_ENTER   = 36
-PIN_KEY_BACK    = 35
-PIN_KEY_LEFT    = 29
-PIN_KEY_RIGHT   = 38
-PIN_KEY_UP      = 33
-PIN_KEY_DOWN    = 37
+  
+PIN_KEY_ENTER   = 31 #B
+PIN_KEY_LEFT    = 13
+PIN_KEY_RIGHT   = 16
+PIN_KEY_UP      = 11
+PIN_KEY_DOWN    = 15
+PIN_KEY_BACK    = 29 #A
+PIN_KEY_EXTRA   = 7  #Center
+PIN_RADIO_IRQ   = 38
+PIN_RADIO_RESET = 40
+PIN_NOT_LOW_BATT = 37
+PIN_LED_RED = 33
+PIN_LED_GREEN = 36
+PIN_LED_BLUE = 35
+PIN_TILT = 32
+PIN_MOTOR_VIBE = 18
 
+PWM_LED_RED = None
+PWM_LED_GREEN = None
+PWM_LED_BLUE = None
 
 
 def init():
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BOARD)
-    
-    GPIO.setup(PIN_RADIO_IRQ, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-    GPIO.setup(PIN_RADIO_RESET, GPIO.OUT)    
-    GPIO.setup(PIN_OLED_RESET, GPIO.OUT)
-    GPIO.setup(PIN_KEY_ENTER, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(PIN_KEY_BACK, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
-    GPIO.setup(PIN_KEY_UP, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(PIN_KEY_DOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(PIN_KEY_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(PIN_KEY_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.output(PIN_OLED_RESET, True)
-
-
-
-#--[Hardware Rev2]
-def initv3():
-    global PIN_KEY_ENTER
-    global PIN_KEY_LEFT
-    global PIN_KEY_RIGHT
-    global PIN_KEY_UP
-    global PIN_KEY_DOWN
-    global PIN_KEY_BACK
-    global PIN_KEY_EXTRA
-    global PIN_RADIO_IRQ
-    global PIN_RADIO_RESET
-    PIN_KEY_ENTER   = 31 #B
-    PIN_KEY_LEFT    = 13
-    PIN_KEY_RIGHT   = 16
-    PIN_KEY_UP      = 11
-    PIN_KEY_DOWN    = 15
-    PIN_KEY_BACK    = 29 #A
-    PIN_KEY_EXTRA   = 7  #Center
-    PIN_RADIO_IRQ   = 38
-    PIN_RADIO_RESET = 40
+    global PWM_LED_RED
+    global PWM_LED_GREEN
+    global PWM_LED_BLUE
 
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BOARD)
@@ -72,3 +48,23 @@ def initv3():
     GPIO.setup(PIN_KEY_DOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(PIN_KEY_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(PIN_KEY_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+
+    GPIO.setup(PIN_TILT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(PIN_NOT_LOW_BATT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    GPIO.setup(PIN_MOTOR_VIBE, GPIO.OUT) 
+    GPIO.setup(PIN_LED_RED, GPIO.OUT) 
+    GPIO.setup(PIN_LED_GREEN, GPIO.OUT) 
+    GPIO.setup(PIN_LED_BLUE, GPIO.OUT) 
+
+    GPIO.output(PIN_LED_RED, False)
+    GPIO.output(PIN_LED_GREEN, False)
+    GPIO.output(PIN_LED_BLUE, False)  
+
+    PWM_LED_RED = GPIO.PWM(PIN_LED_RED, 100)
+    PWM_LED_GREEN = GPIO.PWM(PIN_LED_GREEN, 100)
+    PWM_LED_BLUE = GPIO.PWM(PIN_LED_BLUE, 100)
+    PWM_LED_RED.start(0)
+    PWM_LED_GREEN.start(0)
+    PWM_LED_BLUE.start(0)
