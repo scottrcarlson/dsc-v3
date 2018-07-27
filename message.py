@@ -59,15 +59,12 @@ class Message(Thread):
                 heartbeat_time = time.time()
                 if self.heartbeat.qsize() == 0:
                     self.heartbeat.put_nowait("hb")
-
                 try:
                     packet = self.radio_inbound_queue.get_nowait()
                 except Queue.Empty:
                     pass
                 else:
-                    #self.log.debug("Processing inbound packet.")
                     rssi,snr,msg = packet
-
                     self.process_packet(msg,rssi,snr)
 
                 #Handle TTL, expiration
@@ -86,8 +83,6 @@ class Message(Thread):
                         if time.time() > packet_sent_time + packet_ttl:
                             self.log.debug("Message reaped.")
                             self.repeat_msg_list.remove(network_cipher)
-
-
                             with self.radio_outbound_queue.mutex:
                                 self.radio_outbound_queue.queue.clear()
                         else:
@@ -104,7 +99,6 @@ class Message(Thread):
         self.log.info( "Stopping Message Thread.")
         self.event.set()
 
-
     def fill_outbound_queue(self):
         if self.radio_outbound_queue.qsize() == 0:
             for msg in self.repeat_msg_list:
@@ -115,8 +109,6 @@ class Message(Thread):
             self.process_composed_msg("BEACON", True)
 
     def process_composed_msg(self, msg, is_beacon=False):
-        #DSCv3 Implement Message Encryption here
-
         #  Group Message Packet
         #  8 bytes msg author
         #  8 bytes spare
@@ -135,22 +127,22 @@ class Message(Thread):
         #self.log.debug("group_cipher: " + group_cipher+ " size: " + str(len(group_cipher)))
 
         # Network Message Packet
-        # 4 bytes for "sent-at" time in epoch
-        # 4 bytes time to live iFpn seconds
+        # 4 bytes for "sent-at" time in epoch seconds
+        # 4 bytes time to live in seconds
         # 8 bytes spare
         # 224 byte group cipher
-        # Total 240 bytes OTA mesage cipher
+        # Total 240 bytes OTA message cipher
         timestamp = struct.pack(">I",time.time()) 
         ttl = struct.pack(">I",self.packet_ttl)
         #self.log.debug("Encrypting packet for /network/")
 
         if is_beacon:
-            msg_type = 'B'
-            spare = "   "
+            msg_type = 'B' # Beacon
+            spare = "   "  # 3 bytes
         else:
-            msg_type = 'G'
-            spare = "   " # 3 bytes
-        network_plaintext = timestamp+ttl+'DSC3'+msg_type+spare+group_cipher
+            msg_type = 'G' # Group
+            spare = "   "  # 3 bytes
+        network_plaintext = timestamp + ttl + 'DSC3' + msg_type + spare + group_cipher
         ota_cipher = self.crypto.encrypt(self.network_key, network_plaintext)
 
         if not is_beacon:
@@ -171,13 +163,12 @@ class Message(Thread):
             self.repeat_msg_list.append(msg)
             return True
         else:
-            self.log.debug( "Duplicate Message Received via Radio. Dropped")
+            self.log.debug( "Dropped Duplicate Inbound Message.")
             return False
 
     def check_for_dup(self,msg):
         #Check for duplicates in the repeat msg list, every encrypted msg is unique.
         for m in self.repeat_msg_list:
-            #self.event.wait(0.1) #remove next time seen
             if msg == m:
                 return True
         return False
@@ -258,6 +249,4 @@ class Message(Thread):
             #self.group_cleartexts.append(datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%m-%d %H:%M"))
             self.group_cleartexts.append(packet_author + '|' + time_since + group_msg)
             self.log.debug("GroupText Len: " +  str(len(self.group_cleartexts)))
-
-
         return True

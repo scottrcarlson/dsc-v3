@@ -105,3 +105,5 @@ class Gps(Thread):
 	def stop(self):
 		self.log.info("Stopping GPS Thread.")
 		self.event.set()
+
+		

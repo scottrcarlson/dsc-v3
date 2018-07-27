@@ -269,7 +269,6 @@ class UI(Thread):
             if self.display.row_index > 4:
                 self.display.row_index = 4
 
-
 #---------------------------------[KEY LEFT]-------------------------------------
     def key_left(self, channel):
         self.is_idle = False
@@ -343,7 +342,6 @@ class UI(Thread):
         elif self.display.mode == m_LOCK:
             if GPIO.input(iodef.PIN_KEY_ENTER) == self.active_high:
                 self.main_menu()
-
 
 #---------------------------------[KEY RIGHT]-------------------------------------
     def key_right(self, channel):
@@ -556,6 +554,7 @@ class UI(Thread):
             else:
                 self.display.mode = self.display.dialog_next_mode
 
+#---------------------------------[KEY BACK]-------------------------------------                    
     def key_back(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:

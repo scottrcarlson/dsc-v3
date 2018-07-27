@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-# usage:
-#  python rxr_rx.py /dev/ttyUSB0
-
 from ll_ifc import ModuleConnection, OPCODES
 import sys, time, binascii, struct, os
 import RPi.GPIO as GPIO
@@ -74,9 +71,19 @@ class Radio(Thread):
                     heartbeat_time = time.time()
                     if self.heartbeat.qsize() == 0:
                         self.heartbeat.put_nowait("hb")
+                    if self.config.req_update_radio:
+                        self.config.req_update_radio = False
+                        self.set_params(self.config.freq, 
+                                        self.config.bandwidth, 
+                                        self.config.spread_factor, 
+                                        self.config.coding_rate, 
+                                        self.config.tx_power, 
+                                        self.config.sync_word)
+                        self.log.debug("Radio Settings Updated")
                 elif time.time() - heartbeat_time < 0:
                     self.log.warn("Time changed to past. Re-initializing.")
                     heartbeat_time = time.time()
+
             except Exception as e:
                 self.log.error(str(e))
             self.event.wait(0.05)
@@ -219,7 +226,6 @@ class Radio(Thread):
             except Exception, e:
                 if self.radio_verbose > 0:
                     self.log.error( "EXCEPTION: CLEAR_IRQ_FLAGS: ", exc_info=True)
-
 
     def process_outbound_msg(self):
         if not self.config.airplane_mode:

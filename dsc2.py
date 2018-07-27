@@ -4,21 +4,26 @@
 #----------------------------------------
 import signal
 import time
+import subprocess
+import logging
+import Queue
+import threading
+import RPi.GPIO as GPIO
 from time import sleep
+
+import iodef
+import ble
+import ble_gatt_dsc as ble_gatt
+from message import Message
+from crypto import Crypto
 from radio import Radio
 from display import Display
 from ui import UI
 from gps import Gps
-import iodef
-from message import Message
 from config import Config
-from crypto import Crypto
-import subprocess
-import logging
-import Queue
-import RPi.GPIO as GPIO
+
 version = "v0.3.5"
-revision = "?"
+revision = "?"              #grab this from git
 isRunning = True            #Main Thread Control Bit
 
 radio = None
@@ -31,14 +36,7 @@ heartbeat_radio = Queue.Queue()
 heartbeat_message = Queue.Queue()
 
 def signal_handler(signal, frame): #nicely shut things down
-    log.info("[ " + str(signal) + " ] DSCv3 received shutdown signal.")
-    radio.stop()
-    gps.stop()
-    ui.stop()
-    message.stop()
-    display.stop()
-    global isRunning
-    isRunning = False
+    quitdsc()
 
 def get_hg_rev():
     pipe = subprocess.Popen(
@@ -46,6 +44,16 @@ def get_hg_rev():
         stdout=subprocess.PIPE
         )
     return pipe.stdout.read()
+
+def quitdsc():
+    log.info("DSCv3 received shutdown signal")
+    radio.stop()
+    gps.stop()
+    ui.stop()
+    message.stop()
+    display.stop()
+    global isRunning
+    isRunning = False
 
 if __name__ == "__main__":
     log = logging.getLogger()
@@ -58,7 +66,7 @@ if __name__ == "__main__":
 
     formatter = logging.Formatter('%(asctime)s| %(module)-12s| %(levelname)-8s| %(message)s')
     fh.setFormatter(formatter)
-    formatter = logging.Formatter('%(module)-12s| %(levelname)-8s| %(message)s')
+    formatter = logging.Formatter('%(asctime)s| %(module)-12s| %(levelname)-8s| %(message)s')
     ch.setFormatter(formatter)
 
     log.addHandler(fh)
@@ -70,8 +78,7 @@ if __name__ == "__main__":
     log.info("+ Dirt Simple Comms 3 " + version)
     log.info('+----------------------------+')
 
-    for sig in (signal.SIGABRT, signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, signal_handler)
+  
 
     try:
         with open('rev','r') as f:
@@ -86,23 +93,32 @@ if __name__ == "__main__":
     #log.debug("hg rev: " + revision)
   
     config = Config()
+
     iodef.init()
+    ble.init_ble()
+
     crypto = Crypto()
-    message = Message(crypto, config,heartbeat_message)
+
+    message = Message(crypto, config, heartbeat_message)
     message.start()
+
     radio = Radio("/dev/serial0",config, message, heartbeat_radio)
     radio.start()
-    #add some logic here to spawn if we have GPS unit
+
     gps = Gps()
     gps.start()
 
-
+    #hw_rev == 2
     display = Display(message, version, config, revision, heartbeat_display)
     display.start()
 
+    #hw_rev == 2
     ui = UI(display,message, crypto, radio, config,heartbeat_ui)
     ui.start()
     ui.splash()
+
+    dscGatt = ble_gatt.DscGatt(quitdsc, config)
+    dscGatt.start()
 
     """
     GPIO.output(iodef.PIN_MOTOR_VIBE, True)
@@ -115,6 +131,10 @@ if __name__ == "__main__":
     """
     heartbeat_time = time.time()
 
+    log.debug("HELLO Have we returned control?")
+    for sig in (signal.SIGABRT, signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, signal_handler)
+
     while isRunning:
         try:
             if time.time() - heartbeat_time > 30:
@@ -123,10 +143,12 @@ if __name__ == "__main__":
                 if not GPIO.input(iodef.PIN_NOT_LOW_BATT):
                     log.info("Low Battery")
                     log.info("Shutting the system down in 60 seconds.")
-                if GPIO.input(iodef.PIN_TILT):
-                    log.info("Tilted.")
-                else:
-                    log.info("Not Tilted.")
+                    # Shutdown timer --> do it
+
+                #if GPIO.input(iodef.PIN_TILT):
+                #    log.info("Tilted.")
+                #else:
+                #    log.info("Not Tilted.")
                 try:
                     packet = heartbeat_ui.get_nowait()
                 except Queue.Empty: # Thread possibly dead, start re-covery timer and log

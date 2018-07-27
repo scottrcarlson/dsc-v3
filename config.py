@@ -14,13 +14,19 @@ class Config(object):
     def __init__(self):
         self.log = logging.getLogger()
 
+        #Hardware Revisions:
+        #DSCv2 = 1 (Alpha Standalone)
+        #DSCv3 = 2 (Beta Standalone)
+        #DSCv4 = 3 (Alpha BLE Outboarding)
+        self.req_update_radio = False
+        self.req_save_config = False
+
         self.hw_rev = 2 
         self.airplane_mode = True
         self.tdma_slot = 0
         self.tdma_total_slots = 2
         self.tx_time = 4
         self.tx_deadband = 1
-
         self.freq = 0
         self.bandwidth = 0
         self.bandwidth_eng = ''
@@ -40,7 +46,6 @@ class Config(object):
             self.load_config()
         else:
             self.save_config(False)
-
 
     def update_bandwidth_eng(self): #Units kHz
         if self.bandwidth == 0:
@@ -67,6 +72,7 @@ class Config(object):
         self.save_config(False)
 
     def save_config(self,  is_exist):
+        self.log.debug("Saving Settings to Disk")
         with open(CONFIG_PATH + '/' + CONFIG_FILE,'w') as cfgfile:
             if not is_exist:
                 print "Generating config file."
@@ -93,3 +99,57 @@ class Config(object):
             self.airplane_mode = self.cfg.getboolean("Network","Airplane_Mode")
         except Exception as e:
             self.log.error(str(e))
+
+    def set_hw_rev(self,hw_rev):
+        self.hw_rev = hw_rev
+        self.req_save_config = True
+
+    def set_airplane_mode(self,airplane_mode):
+        self.airplane_mode = airplane_mode
+        self.req_save_config = True
+
+    def set_tdma_slot(self,tdma_slot):
+        self.tdma_slot = tdma_slot
+        self.req_save_config = True
+
+    def set_tdma_total_slots(self,tdma_total_slots):
+        self.tdma_total_slots = tdma_total_slots
+        self.req_save_config = True
+
+    def set_tx_time(self,tx_time):
+        self.tx_time = tx_time
+        self.req_save_config = True
+
+    def set_tx_deadband(self,tx_deadband):
+        self.tx_deadband = tx_deadband
+        self.req_save_config = True
+
+    def set_freq(self,freq):
+         if self.freq != freq:
+            self.freq = freq
+            self.req_update_radio = True
+
+    def set_bandwidth(self,bandwidth):
+        if self.bandwidth != bandwidth:
+            self.bandwidth = bandwidth
+            self.req_update_radio = True
+            
+    def set_spread_factor(self,spread_factor):
+        if self.spread_factor != spread_factor:
+            self.spread_factor = spread_factor
+            self.req_update_radio = True
+
+    def set_coding_rate(self,coding_rate):
+        if self.coding_rate != coding_rate:
+            self.coding_rate = coding_rate
+            self.req_update_radio = True
+
+    def set_tx_power(self,tx_power):
+        if self.tx_power != tx_power:
+            self.tx_power = tx_power
+            self.req_update_radio = True
+
+    def set_sync_word(self,sync_word):
+        if self.sync_word != sync_word:
+            self.sync_word = sync_word
+            self.req_update_radio = True
