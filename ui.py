@@ -411,6 +411,7 @@ class UI(Thread):
 
 #---------------------------------[KEY ENTER]-------------------------------------                    
     def key_enter(self, channel):
+        print "ENTER**"
         self.is_idle = False
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
@@ -420,14 +421,14 @@ class UI(Thread):
             if self.display.row_index >= 0:
                 index = (self.display.row_index * 21) + self.display.col_index
                 if self.display.reg_stage == 1:
-                    if len(self.message.alias) < 8:
-                        self.message.alias = self.message.alias + keyboard[index:index+1]
+                    if len(self.config.alias) < 8:
+                        self.config.alias = self.config.alias + keyboard[index:index+1]
                 elif self.display.reg_stage == 2:
-                    if len(self.message.network_key) < 16:
-                        self.message.network_key = self.message.network_key + keyboard[index:index+1]
+                    if len(self.config.netkey) < 16:
+                        self.config.netkey = self.config.netkey + keyboard[index:index+1]
                 elif self.display.reg_stage == 3:
-                    if len(self.message.alias) < 16:
-                        self.message.group_key = self.message.group_key + keyboard[index:index+1]
+                    if len(self.config.alias) < 16:
+                        self.config.groupkey = self.config.groupkey + keyboard[index:index+1]
 
             else:
                 if self.display.col_index == 0: # NEXT Field
@@ -443,11 +444,11 @@ class UI(Thread):
                          
                         #Pad the keys. Not a great idea. Need to improve this for lazy people.
                         #Key size has to be 16bytes
-                        self.message.alias = self.message.alias.ljust(8)
-                        self.message.network_key = self.message.network_key.ljust(16)
-                        self.message.group_key = self.message.group_key.ljust(16)
+                        self.config.alias = self.config.alias.ljust(8)
+                        self.config.netkey = self.config.netkey.ljust(16)
+                        self.config.groupkey = self.config.groupkey.ljust(16)
 
-                        self.message.node_registered = True
+                        self.config.registered = True
                         self.display.mode = m_MAIN_MENU
 
         elif self.display.mode == m_COMPOSE:
@@ -460,7 +461,7 @@ class UI(Thread):
                     self.display.dialog_msg = ""
                     self.display.dialog_msg2 = ""
                     self.display.dialog_msg3 = "  Sending Message..."
-                    self.message.process_composed_msg(self.message.compose_msg)
+                    self.message.process_composed_msg(self.message.compose_msg, self.config.alias)
                     self.display.row_index = 0
                     self.display.col_index = 0
                     self.dialog_delay = 2
@@ -587,11 +588,11 @@ class UI(Thread):
             self.main_menu()
         elif self.display.mode == m_REG:
             if self.display.reg_stage == 1:
-                self.message.alias = self.message.alias[:-1]
+                self.config.alias = self.config.alias[:-1]
             elif self.display.reg_stage == 2:
-                self.message.network_key = self.message.network_key[:-1]
+                self.config.netkey = self.config.netkey[:-1]
             elif self.display.reg_stage == 3:
-                self.message.group_key = self.message.group_key[:-1]
+                self.config.groupkey = self.config.groupkey[:-1]
         elif self.display.mode == m_LOCK:
             if GPIO.input(iodef.PIN_KEY_LEFT) == self.active_high:
                 self.main_menu()

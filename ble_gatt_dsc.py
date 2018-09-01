@@ -17,10 +17,11 @@ from threading import *
 import traceback
 import subprocess
 import datetime
+import Queue
 
 DSC_SERVICE_UUID = 'deadbeef-0011-1001-1100-00000fffddd0'
 DSC_SETTINGS_UUID = 'deadbeef-0011-1001-1100-00000fffddd1'
-DSC_NOTIFY_UUID = 'deadbeef-0011-1001-1100-00000fffddd3'
+DSC_STATUS_UUID = 'deadbeef-0011-1001-1100-00000fffddd2'
 
 DSC_MSG_INBOUND_UUID = 'deadbeef-0011-1001-1100-00000fffddda'
 DSC_MSG_OUTBOUND_UUID = 'deadbeef-0011-1001-1100-00000fffdddb'
@@ -29,7 +30,7 @@ DSC_DATETIME_UUID = 'deadbeef-0011-1001-1100-00000fffdddc'
 log = logging.getLogger()
 
 class DscGatt(Thread):
-    def __init__(self, quitdsc, config):
+    def __init__(self, quitdsc, message, config, radio):
         Thread.__init__(self)
         self.event = Event()
         self.log = logging.getLogger()
@@ -37,6 +38,8 @@ class DscGatt(Thread):
         self.mainloop = None
         self.quitdsc = quitdsc
         self.config = config
+        self.message = message
+        self.radio = radio
 
     def run(self):
         global mainloop
@@ -56,7 +59,7 @@ class DscGatt(Thread):
                 bus.get_object(gatt.BLUEZ_SERVICE_NAME, adapter),
                 gatt.GATT_MANAGER_IFACE)
 
-        app = Application(bus, self.config)
+        app = Application(bus, self.message, self.config, self.radio)
 
         self.mainloop = GObject.MainLoop()
 
@@ -80,11 +83,11 @@ class Application(dbus.service.Object):
     """
     org.bluez.GattApplication1 interface implementation
     """
-    def __init__(self, bus, config):
+    def __init__(self, bus, message, config, radio):
         self.path = '/'
         self.services = []
         dbus.service.Object.__init__(self, bus, self.path)
-        self.add_service(DSCService(bus, 0, config))
+        self.add_service(DSCService(bus, 0, message, config, radio))
 
     def get_path(self):
         return dbus.ObjectPath(self.path)
@@ -108,11 +111,13 @@ class Application(dbus.service.Object):
         return response
 
 class DSCService(gatt.Service):
-    def __init__(self, bus, index, config):
+    def __init__(self, bus, index, message, config, radio):
         gatt.Service.__init__(self, bus, index, DSC_SERVICE_UUID, True)
         self.add_characteristic(DSC_Settings_Characteristic(bus, 0, self, config))
-        self.add_characteristic(DSC_Msg_Inbound_Characteristic(bus, 1, self))
+        self.add_characteristic(DSC_Msg_Inbound_Characteristic(bus, 1, self, message))
         self.add_characteristic(DSC_Datetime_Characteristic(bus, 2, self))
+        self.add_characteristic(DSC_Status_Characteristics(bus, 3, self, radio))
+        self.add_characteristic(DSC_Msg_Outbound_Characteristic(bus, 4, self, message))
 
 class DSC_Datetime_Characteristic(gatt.Characteristic):
     def __init__(self, bus, index, service):
@@ -185,25 +190,21 @@ class DSC_Datetime_Characteristic(gatt.Characteristic):
             return
         self.notifying = False
 
-class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
-    def __init__(self, bus, index, service):
+class DSC_Status_Characteristics(gatt.Characteristic):
+    def __init__(self, bus, index, service, radio):
         gatt.Characteristic.__init__(
                 self, bus, index,
-                DSC_MSG_INBOUND_UUID,
-                ['encrypt-authenticated-write', 'notify'],
+                DSC_STATUS_UUID,
+                ['notify'],
                 service)
+        self.radio = radio
         self.notifying = False
+        self.radio_state = ""
+        self.radio_freq = ""
+        self.system_time = ""
 
-        self.msg = "Hello, is there anybody out there?"
-        self.author = "Someone"
-        self.recv_time = 0
-        self.sent_time = 0
-        self.rssi = -120  
-        self.snr = 2
-        self.gpslat = 0
-        self.gpslong = 0
         self.value = self.PackageMsg()
-
+   
         self.notify_timer = None
 
     def PackageMsg(self):
@@ -218,6 +219,92 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
 
     def BuildMsgPayload(self):
         payload = {}
+        payload['rf_state'] = self.radio_state
+        payload['rf_freq'] = self.radio_freq
+        payload['time'] = self.system_time
+        
+        msg = {}
+        msg['topic'] = "status"
+        msg['payload'] = payload
+
+        return json.dumps(msg,separators=(',',':'))
+        
+    ### Notify Handset of Settings Change
+    def notify_handset(self):
+        try:
+            outbound_data = self.radio.ble_handset_rf_status_queue.get_nowait()
+            self.radio_freq, self.radio_state = outbound_data
+        except Queue.Empty:
+            self.radio_freq = ""
+            self.radio_state = ""
+
+        self.system_time = str(datetime.datetime.now())
+        self.value = self.PackageMsg()
+        value = []
+        for ch in self.value:
+            value.append(dbus.Byte(ch))
+        self.PropertiesChanged(gatt.GATT_CHRC_IFACE, { 'Value': value }, [])      
+        #log.debug("Sending Status Update to Handset")
+        return self.notifying
+
+    def StartNotify(self):
+        log.debug('DSC Status Notification Enabled')
+        if self.notifying:
+            log.debug('Already notifying, nothing to do')
+            return
+        else:
+            #log.debug("Enabling")
+            self.notify_timer = GObject.timeout_add(1000, self.notify_handset)
+        self.notifying = True
+
+    def StopNotify(self):
+        log.debug('DSC Status Notification Disabled')
+        if not self.notifying:
+            log.debug('Not notifying, nothing to do')
+            return
+        else:
+            #log.debug("Disabling")
+            try:
+                GObject.source_remove(self.notify_timer)
+            except Exception as e:
+                pass
+        self.notifying = False
+
+class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
+    def __init__(self, bus, index, service, message):
+        gatt.Characteristic.__init__(
+                self, bus, index,
+                DSC_MSG_INBOUND_UUID,
+                ['encrypt-authenticated-write', 'notify'],
+                service)
+        self.notifying = False
+        self.message = message
+        self.msgcypher = ""
+        self.msg = ""
+        self.author = "Someone"
+        self.recv_time = 0
+        self.sent_time = 0
+        self.rssi = -120  
+        self.snr = 2
+        self.gpslat = 0
+        self.gpslong = 0
+        self.value = self.PackageMsg()
+   
+        self.notify_timer = None
+
+    def PackageMsg(self):
+        result = self.BuildMsgPayload()
+        try :
+            new_value = []
+            for c in result:
+                new_value.append(ord(c))
+        except Exception as e:
+            log.error("DSC Package Message ERROR: PackeMsg")
+        return new_value
+
+    def BuildMsgPayload(self):
+        payload = {}
+        payload['msgcypher'] = self.msgcypher
         payload['msg'] = self.msg
         payload['author'] = self.author
         payload['sent_time'] = self.sent_time
@@ -226,7 +313,6 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         payload['snr'] = self.snr
         payload['lat'] = self.gpslat
         payload['long'] = self.gpslong
-
         msg = {}
         msg['topic'] = "newmsg"
         msg['payload'] = payload
@@ -240,28 +326,40 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         for i in range(0,len(rawvalue)-1):
             msg += chr(int(rawvalue[i]))
         log.debug((msg))
-        self.notify_timer = GObject.timeout_add(1000, self.notify_handset)
-
+        
     ### Notify Handset of Settings Change
     def notify_handset(self):
-        log.debug("Notifying Handset of Settings Change")
         try:
-            GObject.source_remove(self.notify_timer)
-        except Exception as e:
+            outbound_data = self.message.ble_handset_msg_queue.get_nowait()
+            self.author, packet_id, self.msg, self.msgcypher, self.sent_time,packet_ttl, msg_type = outbound_data
+            #self.log.debug("Sending Message: " + str(self.message.ble_handset_msg_queue.qsize()))
+            log.debug("Notify Handset Msg: " + self.author + ":" + 
+                                                packet_id + ":" + 
+                                                self.msg + ":" + 
+                                                str(self.sent_time) + ":" + 
+                                                str(packet_ttl) + ":" + 
+                                                msg_type)
+            print type(self.msgcypher)
+            self.value = self.PackageMsg()
+            value = []
+            for ch in self.value:
+                value.append(dbus.Byte(ch))
+            self.PropertiesChanged(gatt.GATT_CHRC_IFACE, { 'Value': value }, [])      
+            log.debug("Sending handset message from queue");    
+        except Queue.Empty:
             pass
-        value = []
-        for ch in self.value:
-            value.append(dbus.Byte(ch))
-        self.PropertiesChanged(gatt.GATT_CHRC_IFACE, { 'Value': value }, [])
+            #log.debug("No Messages")
+
         return self.notifying
 
     def StartNotify(self):
-        log.debug('DSC Inbound Msg Notification Enabled')
+        log.debug('DSC Inbound Msg Notification Request Enabled')
         if self.notifying:
             log.debug('Already notifying, nothing to do')
             return
-        #else:
-            #self.notify_timer = GObject.timeout_add(30000, self.notify_handset)
+        else:
+            log.debug("Enabling")
+            self.notify_timer = GObject.timeout_add(5000, self.notify_handset)
         self.notifying = True
 
     def StopNotify(self):
@@ -269,12 +367,42 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         if not self.notifying:
             log.debug('Not notifying, nothing to do')
             return
-        #else:
-            #try:
-            #    GObject.source_remove(self.notify_timer)
-            #except Exception as e:
-            #    pass
+        else:
+            log.debug("Disabling")
+            try:
+                GObject.source_remove(self.notify_timer)
+            except Exception as e:
+                pass
         self.notifying = False
+
+class DSC_Msg_Outbound_Characteristic(gatt.Characteristic):
+    def __init__(self, bus, index, service, message):
+        gatt.Characteristic.__init__(
+                self, bus, index,
+                DSC_MSG_OUTBOUND_UUID,
+                ['encrypt-authenticated-write'],
+                service)
+        self.timer = None
+        self.message = message
+        self.value = ""
+
+    def WriteValue(self, value, options):
+        msg = ''
+        for i in range(0,len(value)):
+            msg += chr(int(value[i]))
+        log.debug(msg)
+        try:
+            parms = json.loads(msg)
+            if (parms['topic'] == 'sendmsg'):
+                self.config_timer = GObject.timeout_add(100, self.sendMsg)
+                self.value = parms['msg'] + "," + parms['author']
+                
+        except:
+            log.error("Outbound Msg Write Error")
+
+    def sendMsg(self):
+        print self.value
+        self.message.process_composed_msg(self.value.split(",")[0].encode("ascii"),self.value.split(",")[1].encode("ascii"))
 
 class DSC_Settings_Characteristic(gatt.Characteristic):
     def __init__(self, bus, index, service, config):
@@ -303,7 +431,7 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
 
     def ReadValue(self, options):
         print "getparms msg received."
-        print (options)
+        #print (options)
         return self.value
 
     def WriteValue(self, value, options):
@@ -325,8 +453,8 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
         log.debug(msg)
         try:
             parms = json.loads(msg)
-            print (parms)
-            print "Topic:" + parms['topic']
+            #print (parms)
+            #print "Topic:" + parms['topic']
             if (parms['topic'] == 'setparms'):
                 self.parms = parms
                 self.config_timer = GObject.timeout_add(1000, self._dsc_set_params)
@@ -351,6 +479,10 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
             payload['coding_rate'] = self.config.coding_rate
             payload['tx_power'] = self.config.tx_power
             payload['sync_word'] = self.config.sync_word
+            payload['alias'] = self.config.alias
+            payload['netkey'] = self.config.netkey
+            payload['groupkey'] = self.config.groupkey
+            payload['registered'] = self.config.registered
 
             msg = {}
             msg['topic'] = "getparms"
@@ -377,6 +509,10 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
             self.config.set_tx_time(parms['tx_time'])
             self.config.set_tx_power(parms['tx_power'])
             self.config.set_sync_word(parms['sync_word'])
+            self.config.set_alias(parms['alias'])
+            self.config.set_netkey(parms['netkey'])
+            self.config.set_groupkey(parms['groupkey'])
+            self.config.set_registered(parms['registered'])
         except Exception:
             traceback.print_exc()
             log.error("Failed to Set Config Params")
@@ -393,7 +529,7 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
         if self.config.req_save_config:
             self.config.req_save_config = False
             self.save_timer = GObject.timeout_add(10000, self._persist_settings)
-        print "Notifying Handset of Settings Change"
+        log.debug("Notifying Handset of Settings Change")
         value = []
         for ch in self.value:
             value.append(dbus.Byte(ch))
@@ -407,7 +543,7 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
         GObject.timeout_add(1000, self.notify_handset)
 
     def StartNotify(self):
-        print 'DSC Settings Notification Enabled'
+        log.debug('DSC Settings Notification Enabled')
         if self.notifying:
             print 'Already notifying, nothing to do'
             return

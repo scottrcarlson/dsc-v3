@@ -17,11 +17,12 @@ class Config(object):
         #Hardware Revisions:
         #DSCv2 = 1 (Alpha Standalone)
         #DSCv3 = 2 (Beta Standalone)
-        #DSCv4 = 3 (Alpha BLE Outboarding)
+        #DSCv3 = 3 (Beta Standalone + BLE Outboarding)
+        #DSCv4 = 4 (Alpha BLE Outboarding)
         self.req_update_radio = False
         self.req_save_config = False
 
-        self.hw_rev = 2 
+        self.hw_rev = 4
         self.airplane_mode = True
         self.tdma_slot = 0
         self.tdma_total_slots = 2
@@ -35,6 +36,10 @@ class Config(object):
         self.coding_rate_eng = ''
         self.tx_power = 0
         self.sync_word = 0
+        self.alias = ''
+        self.netkey = ''
+        self.groupkey = ''
+        self.registered = False
 
         self.cfg = ConfigParser.ConfigParser()
         try:
@@ -128,6 +133,18 @@ class Config(object):
          if self.freq != freq:
             self.freq = freq
             self.req_update_radio = True
+
+    def set_registered(self,registered):
+         self.registered = registered
+
+    def set_alias(self,alias):
+         self.alias = alias
+
+    def set_netkey(self,netkey):
+         self.netkey = netkey
+
+    def set_groupkey(self,groupkey):
+         self.groupkey = groupkey
 
     def set_bandwidth(self,bandwidth):
         if self.bandwidth != bandwidth:

@@ -486,18 +486,18 @@ class Display(Thread):
                         draw.text((0, 0), "Name:", font=self.font, fill=255)
                         draw.text((0, 8), "NetK:", font=self.font, fill=255)
                         draw.text((0, 16), "GrpK:", font=self.font, fill=255)
-                        draw.text((30, 0), self.message.alias, font=self.font, fill=255)
-                        draw.text((30, 8), self.message.network_key, font=self.font, fill=255)
-                        draw.text((30, 16), self.message.group_key, font=self.font, fill=255)
+                        draw.text((30, 0), self.config.alias, font=self.font, fill=255)
+                        draw.text((30, 8), self.config.netkey, font=self.font, fill=255)
+                        draw.text((30, 16), self.config.groupkey, font=self.font, fill=255)
                         if self.reg_stage == 1:
                             self.cursor_y = 0
-                            self.cursor_x = (len(self.message.alias) * 6) + 30
+                            self.cursor_x = (len(self.config.alias) * 6) + 30
                         elif self.reg_stage == 2:
                             self.cursor_y = 8
-                            self.cursor_x = (len(self.message.network_key) * 6) + 30
+                            self.cursor_x = (len(self.config.netkey) * 6) + 30
                         elif self.reg_stage == 3:
                             self.cursor_y = 16
-                            self.cursor_x = (len(self.message.group_key) * 6) + 30
+                            self.cursor_x = (len(self.config.groupkey) * 6) + 30
 
                         if self.cursor and self.reg_stage != 4:
                             draw.text((self.cursor_x, self.cursor_y), "<", font=self.font, fill=255)

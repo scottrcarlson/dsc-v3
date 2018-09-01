@@ -59,6 +59,8 @@ class Radio(Thread):
 
         self.config.update_bandwidth_eng()
         self.config.update_coding_rate_eng()
+
+        self.ble_handset_rf_status_queue = Queue.Queue()
    
     def run(self):
         self.event.wait(1)
@@ -89,7 +91,7 @@ class Radio(Thread):
             self.event.wait(0.05)
 
             try:
-                if self.message.node_registered:
+                if self.config.registered:
                     if self.is_check_inbound and not transmit_ok:# and not is_check_outbound:
                         self.process_inbound_msg()
                     elif transmit_ok and (time.time() - self.last_tx) > self.tx_throttle:
@@ -120,16 +122,21 @@ class Radio(Thread):
                                 self.log.debug("[TX mode] TDMA Slot Active")
                                 #print "[TX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
                             transmit_ok = True
+                            self.ble_handset_rf_status_queue.queue.clear()
+                            self.ble_handset_rf_status_queue.put_nowait([self.config.freq, True])
                         else:
                             self.message.is_radio_tx = False
                             if transmit_ok:
                                 self.log.debug("[RX mode] Listening")
                                 #print "[RX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
                             transmit_ok = False
+                            self.ble_handset_rf_status_queue.queue.clear()
+                            self.ble_handset_rf_status_queue.put_nowait([self.config.freq, False])
                     elif time.time() - last_checked_tdma < 0:
                         self.log.warn("Time changed to past. Re-initializing.")
                         last_checked_tdma = time.time()
             except Exception as e:
+                self.log.error(e, exc_info=True)   
                 self.log.error("Radio Run Task Error: " + str(e))
 
     def stop(self):
@@ -211,7 +218,7 @@ class Radio(Thread):
                     (rssi, ) = struct.unpack_from('<h', bytes(received_data[:2]))
                     snr = received_data[2] / 4.0
 
-                    if self.message.node_registered:
+                    if self.config.registered:
                         self.message.radio_inbound_queue.put_nowait((rssi,snr,msg))
                     sleep(0.15)
                     #GPIO.output(iodef.PIN_LED_RED, False)

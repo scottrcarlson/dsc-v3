@@ -12,8 +12,7 @@ import RPi.GPIO as GPIO
 from time import sleep
 
 import iodef
-import ble
-import ble_gatt_dsc as ble_gatt
+
 from message import Message
 from crypto import Crypto
 from radio import Radio
@@ -22,7 +21,7 @@ from ui import UI
 from gps import Gps
 from config import Config
 
-version = "v0.3.5"
+version = "v0.5.0"
 revision = "?"              #grab this from git
 isRunning = True            #Main Thread Control Bit
 
@@ -38,20 +37,16 @@ heartbeat_message = Queue.Queue()
 def signal_handler(signal, frame): #nicely shut things down
     quitdsc()
 
-def get_hg_rev():
-    pipe = subprocess.Popen(
-        ["hg", "log", "-l", "1", "--template", "{rev}", '/home/dsc/dsc2'], # node is also available
-        stdout=subprocess.PIPE
-        )
-    return pipe.stdout.read()
 
 def quitdsc():
     log.info("DSCv3 received shutdown signal")
     radio.stop()
     gps.stop()
-    ui.stop()
     message.stop()
-    display.stop()
+
+    if config.hw_rev < 3:
+        ui.stop()
+        display.stop()
     global isRunning
     isRunning = False
 
@@ -75,27 +70,21 @@ if __name__ == "__main__":
     logging.getLogger("ll_ifc").setLevel(logging.WARNING)
 
     log.info('+----------------------------+')
-    log.info("+ Dirt Simple Comms 3 " + version)
+    log.info("+ Dirt Simple Comms 4 " + version)
     log.info('+----------------------------+')
 
-  
-
-    try:
-        with open('rev','r') as f:
-            for line in f:
-                segs = line.split(':')
-                if len(segs) > 2:
-                    revision = segs[1].strip()
-                    break
-    except:
-        log.error("REV file missing.")
 
     #log.debug("hg rev: " + revision)
   
     config = Config()
+    log.info("HW Rev: " + str(config.hw_rev))
 
     iodef.init()
-    ble.init_ble()
+
+    if config.hw_rev >= 3:
+        import ble
+        import ble_gatt_dsc as ble_gatt
+        ble.init_ble()
 
     crypto = Crypto()
 
@@ -108,17 +97,17 @@ if __name__ == "__main__":
     gps = Gps()
     gps.start()
 
-    #hw_rev == 2
-    display = Display(message, version, config, revision, heartbeat_display)
-    display.start()
+    if config.hw_rev < 3:
+        display = Display(message, version, config, revision, heartbeat_display)
+        display.start()
 
-    #hw_rev == 2
-    ui = UI(display,message, crypto, radio, config,heartbeat_ui)
-    ui.start()
-    ui.splash()
+        ui = UI(display,message, crypto, radio, config,heartbeat_ui)
+        ui.start()
+        ui.splash()
 
-    dscGatt = ble_gatt.DscGatt(quitdsc, config)
-    dscGatt.start()
+    if config.hw_rev >= 3:
+        dscGatt = ble_gatt.DscGatt(quitdsc, message,config,radio)
+        dscGatt.start()
 
     """
     GPIO.output(iodef.PIN_MOTOR_VIBE, True)
@@ -149,14 +138,15 @@ if __name__ == "__main__":
                 #    log.info("Tilted.")
                 #else:
                 #    log.info("Not Tilted.")
-                try:
-                    packet = heartbeat_ui.get_nowait()
-                except Queue.Empty: # Thread possibly dead, start re-covery timer and log
-                    log.error("UI Thread seems to be dead.")
-                try:
-                    packet = heartbeat_display.get_nowait()
-                except Queue.Empty: # Thread possibly dead, start re-covery timer and log
-                    log.error("Display Thread seems to be dead.")
+                if config.hw_rev < 3:
+                    try:
+                        packet = heartbeat_ui.get_nowait()
+                    except Queue.Empty: # Thread possibly dead, start re-covery timer and log
+                        log.error("UI Thread seems to be dead.")
+                    try:
+                        packet = heartbeat_display.get_nowait()
+                    except Queue.Empty: # Thread possibly dead, start re-covery timer and log
+                        log.error("Display Thread seems to be dead.")
                 try:
                     packet = heartbeat_radio.get_nowait()
                 except Queue.Empty: # Thread possibly dead, start re-covery timer and log
