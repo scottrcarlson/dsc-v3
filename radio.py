@@ -73,6 +73,11 @@ class Radio(Thread):
                     heartbeat_time = time.time()
                     if self.heartbeat.qsize() == 0:
                         self.heartbeat.put_nowait("hb")
+                    if self.config.req_update_network:
+                        self.config.req_update_network = False
+                        self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
+                        self.tdma_frame = self.tdma_slot_width * self.config.tdma_total_slots
+
                     if self.config.req_update_radio:
                         self.config.req_update_radio = False
                         self.set_params(self.config.freq, 
@@ -109,13 +114,14 @@ class Radio(Thread):
 
                     if (time.time() - last_checked_tdma) > 0.25: #Check to see if our TDMA Slot is Active
                         last_checked_tdma = time.time()
-                        epoch = time.time()
+                        epoch = last_checked_tdma
                         tdma_frames_since_epoch = int(epoch / self.tdma_frame)
 
                         slot_start = (self.config.tdma_slot * self.tdma_slot_width) + (self.tdma_frame * tdma_frames_since_epoch)
                         slot_end = slot_start + self.tdma_slot_width
 
                         if (epoch > slot_start and epoch < (slot_end - self.config.tx_deadband)):
+                            #self.log.debug("slot:" + str(self.config.tdma_slot) + " nodes:"+str(self.config.tdma_total_slots) + " txtime:" + str(self.config.tx_time)+" dband:"+str(self.config.tx_deadband))
                             self.message.is_radio_tx = True
                             if not transmit_ok:
                                 self.message.generate_beacon()
