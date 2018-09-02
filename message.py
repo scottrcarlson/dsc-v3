@@ -26,7 +26,6 @@ class Message(Thread):
         self.is_radio_tx = False
 
         self.compose_msg = ""
-        self.alias = ""
 
         self.packet_ttl = 300
 
@@ -109,7 +108,7 @@ class Message(Thread):
 
     def generate_beacon(self):
         if self.config.registered and not self.config.airplane_mode:
-            self.process_composed_msg("BEACON", self.alias, True)
+            self.process_composed_msg("BEACON", self.config.alias, True)
 
     def process_composed_msg(self, msg, author, is_beacon=False):
         #  Group Message Packet
@@ -119,7 +118,7 @@ class Message(Thread):
         #  Total 224 bytes group message Cipher
 
         spare = "    "
-        group_cleartext = author.ljust(8)+'DSC3'+spare+msg
+        group_cleartext = author+'DSC3'+spare+msg
 
         #self.log.debug("Spare size:     [" + str(len(spare)) + "]")
         #self.log.debug("author size:     " + str(len(author)))
@@ -185,6 +184,7 @@ class Message(Thread):
             self.log.debug("Failed to decrypt packet.")
         else:        
             #self.log.debug("network plaintext:" + binascii.hexlify(network_plaintext))
+            #self.log.debug("netkey len: " + str(len(self.config.netkey)) + " grpkey len:" + str(len(self.config.groupkey)))
             if 'DSC3' in network_plaintext:
                 #self.log.debug("check: %s (%d)" % (binascii.hexlify(network_plaintext), len(network_plaintext)))
                 packet_sent_time = struct.unpack(">I",network_plaintext[:4])[0]  # unpack() always returns a tuple
@@ -197,44 +197,56 @@ class Message(Thread):
                 #self.log.debug("Packet sent:   " + datetime.datetime.fromtimestamp(float(packet_sent_time)).strftime("%Y-%m-%d %H:%M:%S"))
                 #self.log.debug("Packet TTL:    " +  str(packet_ttl) + " seconds")
                 #self.log.debug("Packet Spare: [" + packet_spare + "]")
-                if msg_type == 'G':
-                    if self.add_msg_to_repeat_list(msg):
-                        self.log.debug("Decrypting Group Message")
-                        group_cleartext = self.crypto.decrypt(str(self.config.groupkey), packet_group_cipher)
-                        if 'DSC3' in group_cleartext:
-                            packet_author = group_cleartext[:8].strip()
-                            packet_id = group_cleartext[8:12]
-                            packet_spare = group_cleartext[12:16]
-                            group_msg = group_cleartext[16:]
+                group_cleartext = self.crypto.decrypt(str(self.config.groupkey), packet_group_cipher)
+                if 'DSC3' in group_cleartext:
+                    packet_author = group_cleartext[:8].strip()
+                    packet_id = group_cleartext[8:12]
+                    packet_spare = group_cleartext[12:16]
+                    group_msg = group_cleartext[16:]
+
+                    if msg_type == 'G':
+                        if self.add_msg_to_repeat_list(msg):
+                            self.log.debug("Decrypting Group Message")
+                            
                             #self.log.debug("Packet Author: " + packet_author)
                             #self.log.debug("Packet ID:     " + packet_id)
                             #self.log.debug("Packet Spare: [" + packet_spare + "]")
                             #self.log.debug("Group Msg:     " + group_msg)
-                            GPIO.output(iodef.PIN_MOTOR_VIBE, True)
-                            sleep(0.3)
-                            GPIO.output(iodef.PIN_MOTOR_VIBE, False)
-                            sleep(0.3)
-                            GPIO.output(iodef.PIN_MOTOR_VIBE, True)
-                            sleep(0.3)
-                            GPIO.output(iodef.PIN_MOTOR_VIBE, False)
+
                             
-                            self.ble_handset_msg_queue.put_nowait([packet_author, 
+                            
+                            if network_plaintext not in self.network_plaintexts:
+                                self.network_plaintexts.append(network_plaintext)
+                                self.process_group_messages()
+                                GPIO.output(iodef.PIN_MOTOR_VIBE, True)
+                                sleep(0.3)
+                                GPIO.output(iodef.PIN_MOTOR_VIBE, False)
+                                sleep(0.3)
+                                GPIO.output(iodef.PIN_MOTOR_VIBE, True)
+                                sleep(0.3)
+                                GPIO.output(iodef.PIN_MOTOR_VIBE, False)
+                                self.ble_handset_msg_queue.put_nowait([packet_author, 
                                                                    packet_id, 
                                                                    group_msg,base64.encodestring(network_plaintext),
                                                                    packet_sent_time,
                                                                    packet_ttl, 
-                                                                   msg_type]) 
-                            if network_plaintext not in self.network_plaintexts:
-                                self.network_plaintexts.append(network_plaintext)
-                                self.process_group_messages()
-                elif msg_type == 'B':
-                    group_cleartext = self.crypto.decrypt(str(self.config.groupkey), packet_group_cipher)
-                    if 'DSC3' in group_cleartext:
+                                                                   msg_type,
+                                                                   rf_rssi,
+                                                                   rf_snr]) 
+                    elif msg_type == 'B':
                         packet_author = group_cleartext[:8].strip()
                         self.recvd_beacons[packet_author] = (packet_sent_time, rf_rssi, rf_snr)
+                        self.ble_handset_msg_queue.put_nowait([packet_author, 
+                                                               packet_id, 
+                                                               group_msg,base64.encodestring(network_plaintext),
+                                                               packet_sent_time,
+                                                               packet_ttl, 
+                                                               msg_type,
+                                                               rf_rssi,
+                                                               rf_snr]) 
                         self.log.debug("Beacon recv from '" + packet_author + "' RSSI:" + str(rf_rssi) + " SNR:" + str(rf_snr))
-                else:
-                    self.log.warn("Unknown Msg Type: " + group_cleartext + " MsgType: " + msg_type)
+                    else:
+                        self.log.warn("Unknown Msg Type: " + group_cleartext + " MsgType: " + msg_type)
             else:
                 self.log.debug("Packet Dropped due to missing MAC")
 
