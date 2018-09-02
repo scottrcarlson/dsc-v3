@@ -22,8 +22,6 @@ unpad = lambda s : s[:-ord(s[len(s)-1:])]
 class Crypto(object):
 	def __init__(self):
 		self.log = logging.getLogger()
-		self.NETWORK_KEY = ""
-		self.GROUP_KEY = ""
 		#self.log.setLevel(logging.DEBUG)
 
 	def encrypt(self, key, pt):
@@ -62,10 +60,3 @@ class Crypto(object):
 		random_bytes = urandom(16)
 		return random_bytes
 
-if __name__ == "__main__":
-	#c = Crypto()
-	#ct = c.encrypt(c.NETWORK_KEY, "mymsg\x41")
-	#c.decrypt(c.NETWORK_KEY, ct)
-
-	c = Crypto()
-	print c.decrypt("eatme12345678901", binascii.unhexlify("c1c7057432bba0e2acccdedf047c2d2dee2e568ae14cb98eaa80ebdbd0bf2081a87e117bae2637996845a95b5b873473b75be1f174d71e466a9f58589cf8879a"))

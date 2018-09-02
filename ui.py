@@ -444,6 +444,7 @@ class UI(Thread):
                          
                         #Pad the keys. Not a great idea. Need to improve this for lazy people.
                         #Key size has to be 16bytes
+
                         self.config.alias = self.config.alias.ljust(8)
                         self.config.netkey = self.config.netkey.ljust(16)
                         self.config.groupkey = self.config.groupkey.ljust(16)
@@ -584,15 +585,16 @@ class UI(Thread):
                                   self.config.spread_factor, 
                                   self.config.coding_rate, 
                                   self.config.tx_power, 
-                                  self.config.sync_word)
+                                  self.config.sync_word,
+                                  True)
             self.main_menu()
         elif self.display.mode == m_REG:
             if self.display.reg_stage == 1:
-                self.config.alias = self.config.alias[:-1]
+                self.config.set_alias(self.config.alias[:-1])
             elif self.display.reg_stage == 2:
-                self.config.netkey = self.config.netkey[:-1]
+                self.config.set_netkey(self.config.netkey[:-1])
             elif self.display.reg_stage == 3:
-                self.config.groupkey = self.config.groupkey[:-1]
+                self.config.set_groupkey(self.config.groupkey[:-1])
         elif self.display.mode == m_LOCK:
             if GPIO.input(iodef.PIN_KEY_LEFT) == self.active_high:
                 self.main_menu()

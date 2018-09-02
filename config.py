@@ -21,6 +21,7 @@ class Config(object):
         #DSCv4 = 4 (Alpha BLE Outboarding)
         self.req_update_radio = False
         self.req_save_config = False
+        self.req_update_network = False
 
         self.hw_rev = 4
         self.airplane_mode = True
@@ -116,18 +117,22 @@ class Config(object):
     def set_tdma_slot(self,tdma_slot):
         self.tdma_slot = tdma_slot
         self.req_save_config = True
+        self.req_update_network = True
 
     def set_tdma_total_slots(self,tdma_total_slots):
         self.tdma_total_slots = tdma_total_slots
         self.req_save_config = True
+        self.req_update_network = True
 
     def set_tx_time(self,tx_time):
         self.tx_time = tx_time
         self.req_save_config = True
+        self.req_update_network = True
 
     def set_tx_deadband(self,tx_deadband):
         self.tx_deadband = tx_deadband
         self.req_save_config = True
+        self.req_update_network = True
 
     def set_freq(self,freq):
          if self.freq != freq:
@@ -138,13 +143,13 @@ class Config(object):
          self.registered = registered
 
     def set_alias(self,alias):
-         self.alias = alias
+         self.alias = alias.ljust(8)
 
     def set_netkey(self,netkey):
-         self.netkey = netkey
+         self.netkey = netkey.ljust(16)
 
     def set_groupkey(self,groupkey):
-         self.groupkey = groupkey
+         self.groupkey = groupkey.ljust(16)
 
     def set_bandwidth(self,bandwidth):
         if self.bandwidth != bandwidth:
