@@ -10,6 +10,7 @@ from time import sleep
 import time
 import Queue
 import logging
+import random
 
 class Radio(Thread):
     def __init__(self,serial_device, config, message, heartbeat):
@@ -37,7 +38,9 @@ class Radio(Thread):
         self.last_tx = 0
         self.tx_throttle = 1 # Should we calculate based on rf parameters and packet size? YES
         self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
-        self.tdma_frame = self.tdma_slot_width * self.config.tdma_total_slots
+        self.tdma_frame_width = self.tdma_slot_width * self.config.tdma_total_slots
+
+        self.vchannel_freq = 0
 
         self.is_check_outbound = False
         self.is_check_inbound = True
@@ -67,6 +70,7 @@ class Radio(Thread):
         last_checked_tdma = 0
         heartbeat_time = 0
         transmit_ok = False
+        prev_epoch_tdma_frames = 0
         while not self.event.is_set():
             try:
                 if time.time() - heartbeat_time > 5:
@@ -76,7 +80,7 @@ class Radio(Thread):
                     if self.config.req_update_network:
                         self.config.req_update_network = False
                         self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
-                        self.tdma_frame = self.tdma_slot_width * self.config.tdma_total_slots
+                        self.tdma_frame_width = self.tdma_slot_width * self.config.tdma_total_slots
 
                     if self.config.req_update_radio:
                         self.config.req_update_radio = False
@@ -85,7 +89,8 @@ class Radio(Thread):
                                         self.config.spread_factor, 
                                         self.config.coding_rate, 
                                         self.config.tx_power, 
-                                        self.config.sync_word)
+                                        self.config.sync_word,
+                                        True)
                         self.log.debug("Radio Settings Updated")
                 elif time.time() - heartbeat_time < 0:
                     self.log.warn("Time changed to past. Re-initializing.")
@@ -115,17 +120,31 @@ class Radio(Thread):
                     if (time.time() - last_checked_tdma) > 0.25: #Check to see if our TDMA Slot is Active
                         last_checked_tdma = time.time()
                         epoch = last_checked_tdma
-                        tdma_frames_since_epoch = int(epoch / self.tdma_frame)
+                        epoch_tdma_frames = int(epoch / self.tdma_frame_width)
 
-                        slot_start = (self.config.tdma_slot * self.tdma_slot_width) + (self.tdma_frame * tdma_frames_since_epoch)
+                        slot_start = (self.config.tdma_slot * self.tdma_slot_width) + (self.tdma_frame_width * epoch_tdma_frames)
                         slot_end = slot_start + self.tdma_slot_width
-
+                        
+                        if (epoch_tdma_frames != prev_epoch_tdma_frames):
+                            prev_epoch_tdma_frames = epoch_tdma_frames
+                            self.log.debug("Slot Start/End/EpochFrames: %d/%d/%d" % (slot_start,slot_end,epoch_tdma_frames))  
+                            random.seed(self.config.netkey + str(epoch_tdma_frames))
+                            self.vchannel_freq = int(str(int(random.uniform(90250000,92750000))).ljust(9, '0'))
+                            self.log.debug("Virtual Channel Freq: " + str(self.vchannel_freq))
+                            self.set_params(self.vchannel_freq, 
+                                        self.config.bandwidth, 
+                                        self.config.spread_factor, 
+                                        self.config.coding_rate, 
+                                        self.config.tx_power, 
+                                        self.config.sync_word,
+                                        False)
                         if (epoch > slot_start and epoch < (slot_end - self.config.tx_deadband)):
                             #self.log.debug("slot:" + str(self.config.tdma_slot) + " nodes:"+str(self.config.tdma_total_slots) + " txtime:" + str(self.config.tx_time)+" dband:"+str(self.config.tx_deadband))
                             self.message.is_radio_tx = True
                             if not transmit_ok:
                                 self.message.generate_beacon()
-                                self.log.debug("[TX mode] TDMA Slot Active")
+                                self.log.debug("[TX mode] Transmitting")
+                                #self.log.debug("Slot Start/End/EpochFrames: %d/%d/%d" % (slot_start,slot_end,epoch_tdma_frames))
                                 #print "[TX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
                             transmit_ok = True
                             self.ble_handset_rf_status_queue.queue.clear()
@@ -134,6 +153,7 @@ class Radio(Thread):
                             self.message.is_radio_tx = False
                             if transmit_ok:
                                 self.log.debug("[RX mode] Listening")
+                                #self.log.debug("Slot Start/End/EpochFrames: %d/%d/%d" % (slot_start,slot_end,epoch_tdma_frames))
                                 #print "[RX mode] Packets Sent/Recvd/Error: [",self.total_sent,"]/[",self.total_recv,"]/[",self.total_exceptions,"]"
                             transmit_ok = False
                             self.ble_handset_rf_status_queue.queue.clear()
@@ -149,7 +169,7 @@ class Radio(Thread):
         self.log.debug("Stopping Radio Thread.")
         self.event.set()
 
-    def set_params(self,freq,bandwidth,spread_factor,coding_rate,tx_power,sync_word):
+    def set_params(self,freq,bandwidth,spread_factor,coding_rate,tx_power,sync_word,enable_store):
         flags = 255
         parm1 = 0
         parm1 |= ((spread_factor - 6) & 0x07) << 4
@@ -169,7 +189,8 @@ class Radio(Thread):
         self.mc._send_command(OPCODES['TX_POWER'],bytearray([tx_power]))
         self.mc._send_command(OPCODES['SYNC_WORD_SET'],bytearray([sync_word]))
         
-        self.mc._send_command(OPCODES['STORE_SETTINGS'])
+        if enable_store:
+            self.mc._send_command(OPCODES['STORE_SETTINGS'])
 
     def get_params(self):
         params = self.mc._send_command(OPCODES['GET_RADIO_PARAMS'])
