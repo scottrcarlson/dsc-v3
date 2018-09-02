@@ -279,7 +279,8 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
                 service)
         self.notifying = False
         self.message = message
-        self.msgcypher = ""
+        self.topic = ""
+        self.msgcipher = ""
         self.msg = ""
         self.author = "Someone"
         self.recv_time = 0
@@ -304,7 +305,7 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
 
     def BuildMsgPayload(self):
         payload = {}
-        payload['msgcypher'] = self.msgcypher
+        payload['msgcipher'] = self.msgcipher
         payload['msg'] = self.msg
         payload['author'] = self.author
         payload['sent_time'] = self.sent_time
@@ -314,7 +315,7 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         payload['lat'] = self.gpslat
         payload['long'] = self.gpslong
         msg = {}
-        msg['topic'] = "newmsg"
+        msg['topic'] = self.topic
         msg['payload'] = payload
 
         return json.dumps(msg,separators=(',',':'))
@@ -331,15 +332,22 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
     def notify_handset(self):
         try:
             outbound_data = self.message.ble_handset_msg_queue.get_nowait()
-            self.author, packet_id, self.msg, self.msgcypher, self.sent_time,packet_ttl, msg_type = outbound_data
+            self.author, packet_id, self.msg, self.msgcipher, self.sent_time,packet_ttl, msg_type, self.rssi, self.snr = outbound_data
             #self.log.debug("Sending Message: " + str(self.message.ble_handset_msg_queue.qsize()))
+            topic = ""
+            if "G" in msg_type:
+                self.topic = "newmsg"
+            elif "B":
+                self.topic = "newbeacon"
             log.debug("Notify Handset Msg: " + self.author + ":" + 
                                                 packet_id + ":" + 
                                                 self.msg + ":" + 
                                                 str(self.sent_time) + ":" + 
                                                 str(packet_ttl) + ":" + 
-                                                msg_type)
-            print type(self.msgcypher)
+                                                topic + ":" +
+                                                str(self.rssi) + ":" +
+                                                str(self.snr))
+
             self.value = self.PackageMsg()
             value = []
             for ch in self.value:
@@ -402,7 +410,7 @@ class DSC_Msg_Outbound_Characteristic(gatt.Characteristic):
 
     def sendMsg(self):
         print self.value
-        self.message.process_composed_msg(self.value.split(",")[0].encode("ascii"),self.value.split(",")[1].encode("ascii"))
+        self.message.process_composed_msg(self.value.split(",")[0].encode("ascii"),self.value.split(",")[1].encode("ascii").ljust(8))
 
 class DSC_Settings_Characteristic(gatt.Characteristic):
     def __init__(self, bus, index, service, config):
@@ -509,9 +517,9 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
             self.config.set_tx_time(parms['tx_time'])
             self.config.set_tx_power(parms['tx_power'])
             self.config.set_sync_word(parms['sync_word'])
-            self.config.set_alias(parms['alias'])
-            self.config.set_netkey(parms['netkey'])
-            self.config.set_groupkey(parms['groupkey'])
+            self.config.set_alias(parms['alias'].encode("ascii"))
+            self.config.set_netkey(parms['netkey'].encode("ascii"))
+            self.config.set_groupkey(parms['groupkey'].encode("ascii"))
             self.config.set_registered(parms['registered'])
         except Exception:
             traceback.print_exc()
