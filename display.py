@@ -303,8 +303,8 @@ class Display(Thread):
                         draw.text((0, 0), radio_mode + "] " + current_datetime, font=self.font, fill=255)
 
                         row = 1
-                        for alias in self.message.recvd_beacons:
-                            time_sent,rssi,snr = self.message.recvd_beacons[alias]
+                        for alias in self.message.beacons_recvd:
+                            time_sent,rssi,snr = self.message.beacons_recvd[alias]
                             age_sec = time.time() - time_sent
                             time_since = ""
                             if age_sec < 60:
@@ -529,7 +529,7 @@ class Display(Thread):
                                     draw.text((20, 28), ' NEXT ', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
-            self.event.wait(0.03)
+            self.event.wait(0.04)
 
         with canvas(self.device) as draw:
             pass

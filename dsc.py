@@ -42,12 +42,14 @@ def quitdsc():
     log.info("DSCv3 received shutdown signal")
     radio.stop()
     gps.stop()
+    message.test_message_file.close()
     message.stop()
 
     if config.hw_rev < 3:
         ui.stop()
         display.stop()
     global isRunning
+
     isRunning = False
 
 if __name__ == "__main__":
@@ -78,7 +80,7 @@ if __name__ == "__main__":
   
     config = Config()
     log.info("HW Rev: " + str(config.hw_rev))
-
+    log.debug("Node UID: " + config.node_uuid)
     iodef.init()
 
     if config.hw_rev >= 3:

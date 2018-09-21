@@ -124,9 +124,8 @@ class DSC_Datetime_Characteristic(gatt.Characteristic):
         gatt.Characteristic.__init__(
                 self, bus, index,
                 DSC_DATETIME_UUID,
-                ['encrypt-authenticated-write', 'notify'],
+                ['encrypt-authenticated-write'],
                 service)
-        self.notifying = False
         self.value = 0
         self.notify_timer = None
 
@@ -143,11 +142,9 @@ class DSC_Datetime_Characteristic(gatt.Characteristic):
             msg += chr(int(value[i]))
         log.debug(msg)
         self.value = value
-        if self.notifying:
-            self.notify_timer = GObject.timeout_add(100, self.notify_handset)
+        self.notify_timer = GObject.timeout_add(100, self.update_system_time)
 
-    ### Notify Handset of Settings Change
-    def notify_handset(self):
+    def update_system_time(self):
         try:
             GObject.source_remove(self.notify_timer)
         except Exception as e:
@@ -156,7 +153,6 @@ class DSC_Datetime_Characteristic(gatt.Characteristic):
         for i in range(0,len(self.value)-1):
             epoch += chr(int(self.value[i]))
         log.debug("System Time: " + str(datetime.datetime.now()))
-        log.debug("Changing System Time: " + epoch)
         datearg = "'@" + epoch + "'"
         try:
             #I hate myself for using subprocess here, please better way?
@@ -166,29 +162,8 @@ class DSC_Datetime_Characteristic(gatt.Characteristic):
         except Exception as e:
             logging.error(e, exc_info=True)
 
-        #log.debug("DSC System Time: " + )
-        log.debug("Notifying Handset of Datetime Change")
         log.debug("New System Time: " + str(datetime.datetime.now()))
-        #value = []
-        #for ch in self.value:
-        #    value.append(dbus.Byte(ch))
-        #self.PropertiesChanged(gatt.GATT_CHRC_IFACE, { 'Value': value }, [])
-        return self.notifying
-
-    def StartNotify(self):
-        log.debug('DSC Datetime Notification Enabled')
-        if self.notifying:
-            log.debug('Already notifying, nothing to do')
-            return
-
-        self.notifying = True
-
-    def StopNotify(self):
-        log.debug('DSC Datetime Notification Disabled')
-        if not self.notifying:
-            log.debug('Not notifying, nothing to do')
-            return
-        self.notifying = False
+        return True
 
 class DSC_Status_Characteristics(gatt.Characteristic):
     def __init__(self, bus, index, service, radio):
@@ -250,7 +225,6 @@ class DSC_Status_Characteristics(gatt.Characteristic):
     def StartNotify(self):
         log.debug('DSC Status Notification Enabled')
         if self.notifying:
-            log.debug('Already notifying, nothing to do')
             return
         else:
             #log.debug("Enabling")
@@ -260,7 +234,6 @@ class DSC_Status_Characteristics(gatt.Characteristic):
     def StopNotify(self):
         log.debug('DSC Status Notification Disabled')
         if not self.notifying:
-            log.debug('Not notifying, nothing to do')
             return
         else:
             #log.debug("Disabling")
@@ -282,7 +255,8 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         self.topic = ""
         self.msgcipher = ""
         self.msg = ""
-        self.author = "Someone"
+        self.author = ""
+        self.radio_uuid = ""
         self.recv_time = 0
         self.sent_time = 0
         self.rssi = -120  
@@ -308,6 +282,7 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         payload['msgcipher'] = self.msgcipher
         payload['msg'] = self.msg
         payload['author'] = self.author
+        payload['uuid'] = self.radio_uuid
         payload['sent_time'] = self.sent_time
         payload['recv_time'] = self.recv_time   
         payload['rssi'] = self.rssi
@@ -332,22 +307,21 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
     def notify_handset(self):
         try:
             outbound_data = self.message.ble_handset_msg_queue.get_nowait()
-            self.author, packet_id, self.msg, self.msgcipher, self.sent_time,packet_ttl, msg_type, self.rssi, self.snr = outbound_data
+            self.author, self.radio_uuid, self.msg, self.msgcipher, self.sent_time,packet_ttl, msg_type, self.rssi, self.snr = outbound_data
             #self.log.debug("Sending Message: " + str(self.message.ble_handset_msg_queue.qsize()))
             topic = ""
-            if "G" in msg_type:
+            if msg_type == self.message.MSG_TYPE_MESSAGE:
                 self.topic = "newmsg"
-            elif "B":
+            elif msg_type == self.message.MSG_TYPE_BEACON:
                 self.topic = "newbeacon"
-            log.debug("Notify Handset Msg: " + self.author + ":" + 
-                                                packet_id + ":" + 
-                                                self.msg + ":" + 
-                                                str(self.sent_time) + ":" + 
-                                                str(packet_ttl) + ":" + 
+            log.debug("Notify Handset Msg: " + self.author + ":" +
+                                                self.radio_uuid + ":" +
+                                                self.msg + ":" +
+                                                str(self.sent_time) + ":" +
+                                                str(packet_ttl) + ":" +
                                                 topic + ":" +
                                                 str(self.rssi) + ":" +
                                                 str(self.snr))
-
             self.value = self.PackageMsg()
             value = []
             for ch in self.value:
@@ -361,22 +335,18 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         return self.notifying
 
     def StartNotify(self):
-        log.debug('DSC Inbound Msg Notification Request Enabled')
+        log.debug("DSC Inbound Msg Notification Enabled")
         if self.notifying:
-            log.debug('Already notifying, nothing to do')
             return
         else:
-            log.debug("Enabling")
             self.notify_timer = GObject.timeout_add(5000, self.notify_handset)
         self.notifying = True
 
     def StopNotify(self):
-        log.debug('Notification Stop command recvd')
         if not self.notifying:
-            log.debug('Not notifying, nothing to do')
+            log.debug("DSC Inbound Msg Notification Disabled")
             return
         else:
-            log.debug("Disabling")
             try:
                 GObject.source_remove(self.notify_timer)
             except Exception as e:
@@ -410,7 +380,10 @@ class DSC_Msg_Outbound_Characteristic(gatt.Characteristic):
 
     def sendMsg(self):
         print self.value
-        self.message.process_composed_msg(self.value.split(",")[0].encode("ascii"),self.value.split(",")[1].encode("ascii").ljust(8))
+        if self.message.echo_mode:
+            self.message.process_inbound_packet(self.value.split(",")[1].encode("ascii").ljust(8),self.message.MSG_TYPE_ECHO_REQ,self.value.split(",")[0].encode("ascii"))
+        else:    
+            self.message.process_inbound_packet(self.value.split(",")[1].encode("ascii").ljust(8),self.message.MSG_TYPE_MESSAGE,self.value.split(",")[0].encode("ascii"))
 
 class DSC_Settings_Characteristic(gatt.Characteristic):
     def __init__(self, bus, index, service, config):
@@ -553,14 +526,13 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
     def StartNotify(self):
         log.debug('DSC Settings Notification Enabled')
         if self.notifying:
-            print 'Already notifying, nothing to do'
             return
         self.notifying = True
         return True
 
     def StopNotify(self):
+        log.debug('DSC Settings Notification Disabled')
         if not self.notifying:
-            print 'Not notifying, nothing to do'
             return
         self.notifying = False
 

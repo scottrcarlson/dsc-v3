@@ -3,7 +3,6 @@
 # --- GPS Helper Classes
 #----------------------------
 from threading import *
-import time 
 import serial
 import pynmea2
 import sys
@@ -63,7 +62,7 @@ class Gps(Thread):
 						if self.gps_avail: # Falling Edge will Log Missing
 							self.log.warning("GPS device missing")
 						self.gps_avail = False
-						time.sleep(15.0)
+						self.event.wait(15)
 					else:
 						self.log.warning("GPS device detected")
 				else:
@@ -100,7 +99,7 @@ class Gps(Thread):
 						com = None
 						self.gps_avail = False
 						self.log.error("GPS device lost.")
-			time.sleep(10)
+			self.event.wait(10)
 
 	def stop(self):
 		self.log.info("Stopping GPS Thread.")

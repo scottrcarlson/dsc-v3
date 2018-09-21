@@ -203,7 +203,8 @@ class ModuleConnection(object):
         start = time()
         while True:
             if time() - start > self.frame_start_timeout:
-                raise IOError("Did not get frame start within timeout.")
+                print "_receive packet error: timeout: did not receive start byte"
+                break
             byte = self.sdev.read()
             if byte:
                 if ord(byte) == self.frame_start_byte:
@@ -304,8 +305,8 @@ class ModuleConnection(object):
         uuid = self._send_command(OPCODES['MODULE_ID'])
         (uuid_int,) = struct.unpack('>Q', uuid)
         uuid_int &= int('1' * 36, 2)
-        return "$301$0-0-0-{:09X}".format(uuid_int)
-
+        return "{:09X}".format(uuid_int)
+        
     def delete_settings(self):
         """ Returs the module to factory defaults. """
         self._send_command(OPCODES['DELETE_SETTINGS'])

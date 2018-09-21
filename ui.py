@@ -411,7 +411,6 @@ class UI(Thread):
 
 #---------------------------------[KEY ENTER]-------------------------------------                    
     def key_enter(self, channel):
-        print "ENTER**"
         self.is_idle = False
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
@@ -462,7 +461,7 @@ class UI(Thread):
                     self.display.dialog_msg = ""
                     self.display.dialog_msg2 = ""
                     self.display.dialog_msg3 = "  Sending Message..."
-                    self.message.process_composed_msg(self.message.compose_msg, self.config.alias)
+                    self.message.process_inbound_packet(self.config.alias, self.message.MSG_TYPE_MESSAGE,self.message.compose_msg)
                     self.display.row_index = 0
                     self.display.col_index = 0
                     self.dialog_delay = 2
@@ -574,6 +573,7 @@ class UI(Thread):
             self.main_menu()
         elif self.display.mode == m_SETTINGS:
             self.config.save_config(True)
+            self.config.req_update_network = True
             self.main_menu()
         elif self.display.mode == m_LOG_VIEWER:
             self.main_menu()
@@ -590,11 +590,14 @@ class UI(Thread):
             self.main_menu()
         elif self.display.mode == m_REG:
             if self.display.reg_stage == 1:
-                self.config.set_alias(self.config.alias[:-1])
+                if len(self.config.alias) > 0:
+                    self.config.set_alias(self.config.alias[:-1])
             elif self.display.reg_stage == 2:
-                self.config.set_netkey(self.config.netkey[:-1])
+                if len(self.config.netkey) > 0:
+                    self.config.set_netkey(self.config.netkey[:-1])
             elif self.display.reg_stage == 3:
-                self.config.set_groupkey(self.config.groupkey[:-1])
+                if len(self.config.groupkey) > 0:
+                    self.config.set_groupkey(self.config.groupkey[:-1])
         elif self.display.mode == m_LOCK:
             if GPIO.input(iodef.PIN_KEY_LEFT) == self.active_high:
                 self.main_menu()
