@@ -46,8 +46,8 @@ class Radio(Thread):
         self.prev_total_sent = 0
         self.prev_total_recv = 0
         self.prev_total_exceptions = 0
-        self.prev_private_mode_send_flag = self.message.private_mode_send_flag
         self.prev_private_mode = self.message.private_mode
+
         self.is_radio_tx = False
 
         self.last_tx = 0
@@ -112,11 +112,7 @@ class Radio(Thread):
 
                 if time.time() - chkcfg_time > 1:
                     chkcfg_time = time.time()
-                    if self.config.req_update_network:
-                        self.config.req_update_network = False
-                        self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
-                        self.tdma_frame_width = (self.tdma_slot_width * self.config.tdma_total_slots) + self.frame_config_width
-                        self.log.debug("Network Configuration Updated")
+                   
                     if self.config.req_update_radio:
                         self.config.req_update_radio = False
                         self.set_params(self.config.freq, 
@@ -150,95 +146,79 @@ class Radio(Thread):
 
                     if (time.time() - last_checked_tdma) > 0.1: #Check to see if our TDMA Slot is Active
                         last_checked_tdma = time.time()
-                        epoch = last_checked_tdma
-                        epoch_tdma_frames = int(epoch / self.tdma_frame_width)
 
-                        slot_start = self.frame_config_width + (self.config.tdma_slot * self.tdma_slot_width) + (self.tdma_frame_width * epoch_tdma_frames)
-                        slot_end = slot_start + self.tdma_slot_width
-                        #print self.tdma_frame_width
-                       
-                        if (epoch_tdma_frames != prev_epoch_tdma_frames):
+                        if self.message.private_mode == self.message.PRIVATE_MODE_DISABLED:
+                            tdma_slot = self.config.tdma_slot
+                            tdma_total_slots = self.config.tdma_total_slots
+                        elif self.message.private_mode == self.message.PRIVATE_MODE_PRIMARY:
+                            tdma_slot = 0
+                            tdma_total_slots = 2
+                        elif self.message.private_mode == self.message.PRIVATE_MODE_SECONDARY:
+                            tdma_slot = 1
+                            tdma_total_slots = 2
+                        
+                        epoch = last_checked_tdma
+                        #epoch_tdma_frames_float = epoch / self.tdma_frame_width
+                        epoch_tdma_frames = int(epoch / self.tdma_frame_width)
+                        #print epoch_tdma_frames_float % epoch_tdma_frames
+                        if epoch_tdma_frames != prev_epoch_tdma_frames: #and (epoch_tdma_frames_float % int(epoch_tdma_frames_float)) < 0.25 ):
                             prev_epoch_tdma_frames = epoch_tdma_frames
 
                             #New TDMA Frame, check and set network configuration
                             if self.message.private_mode != self.message.PRIVATE_MODE_DISABLED:
                                 random.seed(self.config.netkey + self.config.e_ch_seed + str(epoch_tdma_frames))
+                                self.tdma_slot_width = self.config.e_tx_time + self.config.e_tx_deadband
                                 self.vchannel_freq = int(str(int(random.uniform(90250000,92750000))).ljust(9, '0'))
                                 self.log.debug("Private Virtual Channel Freq: " + str(self.vchannel_freq))
-                                self.set_params(self.vchannel_freq, 
-                                            self.config.e_bandwidth, 
-                                            self.config.e_spread_factor, 
-                                            self.config.e_coding_rate, 
-                                            self.config.e_tx_power, 
-                                            self.config.sync_word,
-                                            False)
-                                if not self.is_radio_tx:
-                                    self.set_radio_recv_mode()
-
+                                try:
+                                    self.set_params(self.vchannel_freq, 
+                                                self.config.e_bandwidth, 
+                                                self.config.e_spread_factor, 
+                                                self.config.e_coding_rate, 
+                                                self.config.e_tx_power, 
+                                                self.config.sync_word,
+                                                False)
+                                except:
+                                    self.log.error("IO Error from Radio Module")
+                                    
                             else:
                                 random.seed(self.config.netkey + str(epoch_tdma_frames))
+                                self.tdma_slot_width = self.config.tx_time + self.config.tx_deadband
                                 self.vchannel_freq = int(str(int(random.uniform(90250000,92750000))).ljust(9, '0'))
                                 self.log.debug("Main Virtual Channel Freq: " + str(self.vchannel_freq))
-                                self.set_params(self.vchannel_freq, 
-                                            self.config.bandwidth, 
-                                            self.config.spread_factor, 
-                                            self.config.coding_rate, 
-                                            self.config.tx_power, 
-                                            self.config.sync_word,
-                                            False)
+                                try:
+                                    self.set_params(self.vchannel_freq, 
+                                                self.config.bandwidth, 
+                                                self.config.spread_factor, 
+                                                self.config.coding_rate, 
+                                                self.config.tx_power, 
+                                                self.config.sync_word,
+                                                False)
+                                except:
+                                    self.log.error("IO Error from Radio Module")
+  
 
-                        if self.message.private_mode == self.message.PRIVATE_MODE_PRIMARY:
-                            if self.message.private_mode != self.prev_private_mode:
-                                self.prev_private_mode = self.message.private_mode
-                                self.prev_private_mode_send_flag = self.message.private_mode_send_flag
-                                self.log.debug("[TX mode] Transmitting Data")
+
+                        self.tdma_frame_width = (self.tdma_slot_width * tdma_total_slots) + self.frame_config_width
+                        slot_start = self.frame_config_width + (tdma_slot * self.tdma_slot_width) + (self.tdma_frame_width * epoch_tdma_frames)
+                        slot_end = slot_start + self.tdma_slot_width
+                        
+                        if epoch > slot_start and epoch < (slot_end - self.config.tx_deadband):                           
+                            if not self.is_radio_tx:
                                 self.is_radio_tx = True
-                            elif self.message.private_mode_send_flag != self.prev_private_mode_send_flag:
-                                self.prev_private_mode_send_flag = self.message.private_mode_send_flag
-                                if self.message.private_mode_send_flag:
-                                    self.log.debug("[TX mode] Transmitting Data")
-                                    self.is_radio_tx = True
-                                else:
-                                    self.log.debug("[RX mode] Listening for Ack")
-                                    self.is_radio_tx = False
-                                    self.set_radio_recv_mode()
-                        elif self.message.private_mode == self.message.PRIVATE_MODE_SECONDARY:
-                            if self.message.private_mode != self.prev_private_mode:
-                                self.prev_private_mode = self.message.private_mode
-                                self.prev_private_mode_send_flag = self.message.private_mode_send_flag
+                                self.message.generate_beacon()
+                                #self.log.debug("[TX mode] Transmitting")
+                            
+                            self.ble_handset_rf_status_queue.queue.clear()
+                            self.ble_handset_rf_status_queue.put_nowait([self.config.freq, True])
+                        else:
+                            if self.is_radio_tx:
                                 self.is_radio_tx = False
-                                self.log.debug("[RX mode] Listening for Data")
+                                #self.log.debug("[RX mode] Listening")
                                 self.set_radio_recv_mode()
-                            elif self.message.private_mode_send_flag != self.prev_private_mode_send_flag:
-                                self.prev_private_mode_send_flag = self.message.private_mode_send_flag
-                                if self.message.private_mode_send_flag:
-                                    self.log.debug("[TX mode] Sending Ack")
-                                    self.is_radio_tx = True
-                                    self.event.wait(2) #hack
-                                else:
-                                    self.is_radio_tx = False
-                                    self.log.debug("[RX mode] Listening for Data")
-                                    self.set_radio_recv_mode()
-
-                        elif self.message.private_mode == self.message.PRIVATE_MODE_DISABLED:
-                            if self.message.private_mode != self.prev_private_mode:
-                                self.prev_private_mode = self.message.private_mode
-                            if epoch > slot_start and epoch < (slot_end - self.config.tx_deadband):                           
-                                if not self.is_radio_tx:
-                                    self.is_radio_tx = True
-                                    self.message.generate_beacon()
-                                    self.log.debug("[TX mode] Transmitting")
-                                
-                                self.ble_handset_rf_status_queue.queue.clear()
-                                self.ble_handset_rf_status_queue.put_nowait([self.config.freq, True])
-                            else:
-                                if self.is_radio_tx:
-                                    self.is_radio_tx = False
-                                    self.log.debug("[RX mode] Listening")
-                                    self.set_radio_recv_mode()
-                                
-                                self.ble_handset_rf_status_queue.queue.clear()
-                                self.ble_handset_rf_status_queue.put_nowait([self.config.freq, False])
+                            
+                            self.ble_handset_rf_status_queue.queue.clear()
+                            self.ble_handset_rf_status_queue.put_nowait([self.config.freq, False])
 
                     elif time.time() - last_checked_tdma < 0:
                         self.log.warn("Time changed to past. Re-initializing.")
@@ -319,7 +299,7 @@ class Radio(Thread):
             if not self.config.airplane_mode:
                 if len(received_data) > 0:
                     #GPIO.output(iodef.PIN_LED_RED, True)
-                    print "@@@@@@@@@@@@@@@"
+                    #print "@@@@@@@@@@@@@@@"
                     iodef.PWM_LED_RED.ChangeDutyCycle(5)
                     self.update_stats = True
                     msg = received_data[3:]
@@ -329,8 +309,12 @@ class Radio(Thread):
                     snr = received_data[2] / 4.0
 
                     if self.config.registered:
-                        self.message.radio_inbound_queue.put_nowait((rssi,snr,msg))
-                    self.event.wait(0.15)
+                        self.message.radio_inbound_queue.put_nowait((rssi,snr,str(msg)))
+                    
+
+                    ####self.event.wait(0.15)
+                    
+
                     #GPIO.output(iodef.PIN_LED_RED, False)
                     iodef.PWM_LED_RED.ChangeDutyCycle(0)
         finally:
@@ -350,23 +334,25 @@ class Radio(Thread):
             isbeacon = False
             try:
                 outbound_data = self.message.radio_beacon_queue.get_nowait()
-                #self.log.debug("Sending Beacon: " + str(self.message.radio_beacon_queue.qsize()))
                 isbeacon = True
             except Queue.Empty:
                 try:
                     outbound_data = self.message.radio_outbound_queue.get_nowait()
-                    print "********************** msg queued for tx"
+                    #print "********************** msg queued for tx"
                     #self.tx_throttle = 0.5#((1.0 / 510.0) * len(outbound_data)) + 0.3 #Scale found empiracaly (ie. no radio errors)
                     #self.log.debug(str(len(outbound_data)) + " bytes/tx_throttle=" + str(self.tx_throttle))
                 except Queue.Empty:
                     pass
             if outbound_data != '':
+                #self.log.debug("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 if isbeacon:
                     iodef.PWM_LED_BLUE.ChangeDutyCycle(5)
                     #GPIO.output(iodef.PIN_LED_BLUE, True)
+                    #self.log.debug("Sending Beacon")
                 else:
                     iodef.PWM_LED_GREEN.ChangeDutyCycle(5)
                     #GPIO.output(iodef.PIN_LED_GREEN, True)
+                    #self.log.debug("Sending Msg")
 
                 self.is_check_outbound = True
                 self.txing = True
