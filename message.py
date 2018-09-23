@@ -103,6 +103,7 @@ class Message(Thread):
                 if self.prev_private_mode != self.private_mode:
                     self.prev_private_mode = self.private_mode
                     self.private_mode_time = time.time()
+                    self.radio_outbound_queue.queue.clear()
                     if self.private_mode == self.PRIVATE_MODE_DISABLED:
                         self.log.debug("Transfer time: " + str(time.time() - self.private_session_time))
                     else:
@@ -126,7 +127,7 @@ class Message(Thread):
         self.event.set()
 
     def fill_outbound_queue(self):
-        self.radio_outbound_queue.queue.clear()
+        #self.radio_outbound_queue.queue.clear()
         if self.radio_outbound_queue.qsize() == 0:
             for msg_uuid, msg in self.repeat_msg_list:
                 if self.peer_uuid not in self.disregard_list:
@@ -470,7 +471,7 @@ class Message(Thread):
                         else:
                             self.disregard_list[self.peer_uuid] = [msg_uuid]
                         #----------------
-                    self.radio_outbound_queue.queue.clear()
+                    #self.radio_outbound_queue.queue.clear()
  
                     if beacon_hash == self.beacon_hash:
                         self.private_mode_disabled_req = True

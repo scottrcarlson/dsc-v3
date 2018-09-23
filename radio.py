@@ -11,17 +11,6 @@ import Queue
 import logging
 import random
 
-#Traceback (most recent call last):
-#  File "/home/dsc/dsc/radio.py", line 145, in run
-#    False)
-#  File "/home/dsc/dsc/radio.py", line 196, in set_params
-#    self.mc._send_command(OPCODES['TX_POWER'],bytearray([tx_power]))
-#  File "/home/dsc/dsc/ll_ifc.py", line 164, in _send_command
-#    response = self._receive_packet(opcode, self.message_counter)
-#  File "/home/dsc/dsc/ll_ifc.py", line 223, in _receive_packet
-#    Received %s not %s" % (resp_opcode, opcode))
-#IOError: Did not get the same opcode we sent:                Received 15 not 7
-#2018-09-05 12:52:37,277| radio       | ERROR   | Radio Run Task Error: Did not get the same opcode we sent:                Received 15 not 7
 class Radio(Thread):
     def __init__(self,serial_device, config, message, heartbeat):
         Thread.__init__(self)
