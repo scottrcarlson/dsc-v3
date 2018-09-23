@@ -39,7 +39,7 @@ def signal_handler(signal, frame): #nicely shut things down
 
 
 def quitdsc():
-    log.info("DSCv3 received shutdown signal")
+    log.info("DSC received shutdown signal")
     radio.stop()
     gps.stop()
     message.test_message_file.close()

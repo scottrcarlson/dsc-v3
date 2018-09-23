@@ -14,6 +14,7 @@ import uuid
 import re
 import traceback
 import os
+import math
 
 # Message thread is responsible for producing and consuming inbound/outbound radio packets via Queues
 # Perodically fill outbound queue with packets on the repeat list
@@ -35,7 +36,8 @@ class Message(Thread):
         self.MSG_TYPE_ACK = 5
         self.MSG_TYPE_NACK = 6
         self.MSG_TYPE_ECHO_REQ = 7
-        
+        self.MSG_TYPE_SYNC_DISREGARD = 8
+
         self.packet_ttl = 300
 
         self.compose_msg = ""
@@ -62,10 +64,12 @@ class Message(Thread):
         self.PRIVATE_MODE_PRIMARY = 1
         self.PRIVATE_MODE_SECONDARY = 2
         self.private_mode = self.PRIVATE_MODE_DISABLED
+        self.prev_private_mode = self.PRIVATE_MODE_DISABLED
         self.private_mode_send_flag = False
-        self.private_mode_timeout = 30
+        self.private_mode_timeout = 20
         self.private_mode_time = 0
         self.private_mode_disabled_req = False
+        self.private_session_time = 0
         self.log.info("Initialized Message Thread.")
 
         self.test_echo_cnt = 0
@@ -95,45 +99,44 @@ class Message(Thread):
                     rssi,snr,msg = packet
                     self.process_inbound_packet(msg,rssi,snr)
                     self.event.wait(0.01)
-                #if self.private_mode == self.PRIVATE_MODE_PRIMARY:
-                #    if not self.fill_outbound_queue():
-                #        pass
-                        #self.private_mode_disabled_req = True
+
+                if self.prev_private_mode != self.private_mode:
+                    self.prev_private_mode = self.private_mode
+                    self.private_mode_time = time.time()
+                    if self.private_mode == self.PRIVATE_MODE_DISABLED:
+                        self.log.debug("Transfer time: " + str(time.time() - self.private_session_time))
+                    else:
+                        self.private_session_time = time.time()
 
                 if self.private_mode != self.PRIVATE_MODE_DISABLED:
-                    if not self.fill_outbound_queue():
-                        pass
                     if time.time() > self.private_mode_time + self.private_mode_timeout:
                         self.private_mode = self.PRIVATE_MODE_DISABLED
                         self.log.debug("Private Channel Timedout, returning to Main Virtual Channel")
-                else:
-                    self.radio_outbound_queue.queue.clear()
+
             except Exception as e:
                 #self.log.error(str(e))
                 traceback.print_exc()
 
             if self.config.test_mode:
                 self.check_for_test_messages()
-            self.event.wait(0.1)
+            self.event.wait(0.05)
 
     def stop(self):
         self.log.info( "Stopping Message Thread.")
         self.event.set()
 
     def fill_outbound_queue(self):
+        self.radio_outbound_queue.queue.clear()
         if self.radio_outbound_queue.qsize() == 0:
             for msg_uuid, msg in self.repeat_msg_list:
                 if self.peer_uuid not in self.disregard_list:
+                    print msg.encode("hex")
                     self.radio_outbound_queue.put_nowait(msg)
                 else:
                     if msg_uuid not in self.disregard_list[self.peer_uuid]:
                         self.radio_outbound_queue.put_nowait(msg)
-            if self.radio_outbound_queue.qsize() == 0:
-                return False
-            else:   
-                return True
-        else:
-            return True
+                        print msg.encode("hex")[:4]
+        return self.radio_outbound_queue.qsize()
 
     def generate_beacon(self):
         if self.config.registered and not self.config.airplane_mode:
@@ -144,6 +147,9 @@ class Message(Thread):
             elif self.beacon_type == self.MSG_TYPE_ACK:
                 #self.log.debug("Sending Ack Response")
                 self.process_outbound_packet(self.beacon_type)
+            elif self.beacon_type == self.MSG_TYPE_SYNC_DISREGARD:
+                print "sync disregard"
+                self.process_outbound_packet(self.beacon_type)
             else:
                 #self.log.debug("Sending Beacon")
                 self.process_outbound_packet(self.beacon_type)
@@ -153,14 +159,15 @@ class Message(Thread):
         if self.beacon_type == self.MSG_TYPE_BEACON_ENGAGE:
             self.log.debug("Engagement Beacon Sent. Switching to Private Virtual Channel")
             self.config.req_update_network = True
-            self.private_mode = self.PRIVATE_MODE_SECONDARY
-            self.private_mode_time = time.time()
+            self.private_mode = self.PRIVATE_MODE_SECONDARY 
             self.private_mode_send_flag = False
         elif self.beacon_type == self.MSG_TYPE_ACK_REQ:
             self.private_mode_send_flag = False
         elif self.beacon_type == self.MSG_TYPE_ACK:
+            self.beacon_ack_list = []
             self.private_mode_send_flag = False
-
+        elif self.beacon_type == self.MSG_TYPE_SYNC_DISREGARD:
+            pass
         if self.private_mode_disabled_req:
             self.private_mode_disabled_req = False
             self.private_mode = self.PRIVATE_MODE_DISABLED
@@ -195,10 +202,10 @@ class Message(Thread):
 
 
     def process_outbound_packet(self, msg_type, msg=""):
-        if msg_type == self.MSG_TYPE_BEACON or msg_type == self.MSG_TYPE_ACK_REQ:    
+        if msg_type == self.MSG_TYPE_BEACON:  
             ### Beacon Packet
             #     8 bytes msg author
-            #     8 bytes radio uuid
+            #     8 bytes node uuid
             #     32 bytes md5 hash of all ota_ciphers in repeat_list
             #
             #     Total 48 bytes for a beacon packet
@@ -207,32 +214,47 @@ class Message(Thread):
                                self.config.node_uuid.ljust(8) + 
                                self.beacon_hash)
 
+
         elif msg_type == self.MSG_TYPE_ACK:
             ### Ack Packet
             #     8 bytes msg author
-            #     8 bytes radio uuid
+            #     8 bytes node uuid
             #     32 bytes md5 hash of all ota_ciphers in repeat_list
             #       
-            #     Total 64 + (ack * 4) bytes for a beacon packet
+            #     Total 64 + (ack * 8) bytes for a beacon packet
             ##################
             group_cleartext = (self.config.alias.ljust(8) + 
                                self.config.node_uuid.ljust(8) + 
                                self.beacon_hash + 
                                "".join(self.beacon_ack_list))
-            #if len(self.beacon_ack_list) > 0:
-            
-                #for msg_uuid in self.beacon_ack_list:
-                #    group_cleartext += msg_uuid
+
+
+        elif msg_type == self.MSG_TYPE_SYNC_DISREGARD:
+            ### Sync Disregard Packet
+            #     8 bytes msg author
+            #     8 bytes node uuid
+            #       
+            #     Total 16 + 
+            ##################
+            group_cleartext = (self.config.alias.ljust(8) + 
+                               self.config.node_uuid.ljust(8) + 
+                               "".join(self.beacon_ack_list))
+
 
         elif msg_type == self.MSG_TYPE_MESSAGE or msg_type == self.MSG_TYPE_ECHO_REQ:
             ### Group Message Packet
             #     8 bytes msg author
-            #     8 bytes radio uuid
-            #     208 bytes for message
+            #     8 bytes node uuid
+            #     159 bytes for message
             #
-            #     Total 224 bytes group message packet
+            #     Total 175 bytes
             ###################
+            if len(msg) > 159:
+                self.log.error("Rejected new " + str(len(msg)) + " byte msg. 159 bytes max")
+                return False
+
             group_cleartext = self.config.alias.ljust(8) + self.config.node_uuid.ljust(8) + msg
+
 
         elif msg_type == self.MSG_TYPE_BEACON_ENGAGE:
             ### Engage Request Packet
@@ -249,9 +271,9 @@ class Message(Thread):
             #     Total 24 bytes for a beacon packet
             ##################
             self.config.e_ch_seed = str(uuid.uuid4())[:2]
-            self.config.e_tx_power = 26
+            self.config.e_tx_power = 20
             self.config.e_bandwidth = 3
-            self.config.e_spread_factor = 10
+            self.config.e_spread_factor = 8
             self.config.e_coding_rate = 2
             self.config.e_tx_time = 4
             self.config.e_tx_deadband = 1
@@ -283,14 +305,14 @@ class Message(Thread):
         # 3 bytes system id
         # 8 bytes beacon uuid
         # 1 byte  msg type
-        # 205 byte group cipher
-        # Total 225 bytes OTA message packet
+        # ?? byte group cipher
+        # Total ?? bytes OTA message packet
         timestamp = struct.pack(">I",time.time())
         ttl = struct.pack(">I",self.packet_ttl)
         msg_uuid = str(uuid.uuid4())[:8]
         network_plaintext = timestamp + ttl + 'DSC' + msg_uuid + str(msg_type) + group_cipher
         ota_cipher = self.crypto.encrypt(str(self.config.netkey), network_plaintext)
-
+        #self.log.debug(str(len(ota_cipher)))
         if msg_type == self.MSG_TYPE_MESSAGE or msg_type == self.MSG_TYPE_ECHO_REQ:
             if self.add_msg_to_repeat_list(msg_uuid, ota_cipher):
                 self.network_plaintexts.append(network_plaintext)
@@ -315,10 +337,8 @@ class Message(Thread):
         #self.log.debug("Processing Inbound Packet")
         #self.log.debug("Processing Network Message.. ") #RSSI/SNR: " + rf_rssi + "/" + rf_snr)
         #self.log.debug("key:" + self.network_key + " size:" + str(len(self.network_key)))
-        if self.check_for_dup(ota_cipher,self.repeat_msg_list):
-            self.log.debug( "Dropped Duplicate Inbound Message.")
-            self.beacon_type = self.MSG_TYPE_ACK
-            return False
+        if self.private_mode != self.PRIVATE_MODE_DISABLED:
+            self.private_mode_time = time.time()
 
         try:
             network_plaintext = self.crypto.decrypt(str(self.config.netkey), str(ota_cipher))
@@ -336,6 +356,14 @@ class Message(Thread):
                 msg_type = int(network_plaintext[19:20])
                 group_cipher = network_plaintext[20:]
 
+                if self.check_for_dup(ota_cipher,self.repeat_msg_list):
+                    self.log.debug( "Dropping inbound dup " + str(msg_uuid))
+                    if self.private_mode != self.PRIVATE_MODE_DISABLED:
+                        self.beacon_type = self.MSG_TYPE_ACK
+                        if not self.check_for_dup2(msg_uuid,self.beacon_ack_list):
+                            self.beacon_ack_list.append(msg_uuid)
+                    return False
+
                 group_cleartext = self.crypto.decrypt(str(self.config.groupkey), group_cipher)
                 packet_author = group_cleartext[:8].strip()
                 node_uuid = group_cleartext[8:16]
@@ -344,14 +372,23 @@ class Message(Thread):
                     if self.add_msg_to_repeat_list(msg_uuid, ota_cipher):
                         group_msg = group_cleartext[16:]
 
+                        #---------------
+                        # Prevent sending messages to nodes that already have them
+                        #---------------
                         if node_uuid in self.disregard_list:
-                            self.disregard_list[node_uuid].append(msg_uuid)
+                            self.disregard_list[node_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[node_uuid] else None
                         else:
                             self.disregard_list[node_uuid] = [msg_uuid]
 
+                        if self.peer_uuid in self.disregard_list:
+                            self.disregard_list[self.peer_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[self.peer_uuid] else None
+                        else:
+                            self.disregard_list[self.peer_uuid] = [msg_uuid]
+
                         if not self.check_for_dup2(msg_uuid,self.beacon_ack_list):
                             self.beacon_ack_list.append(msg_uuid)
-                        
+                        #----------------
+
                         if network_plaintext not in self.network_plaintexts:
                             self.network_plaintexts.append(network_plaintext)
                             if self.config.hw_rev <= 2:
@@ -379,9 +416,9 @@ class Message(Thread):
                             if msg_type == self.MSG_TYPE_ECHO_REQ:
                                 self.test_echo_cnt += 1
                                 self.process_outbound_packet(self.MSG_TYPE_MESSAGE,group_msg + " [count:" + str(self.test_echo_cnt) + "]")
-                            self.log.debug("New Message Received.")
+                            self.log.debug("Recv New msg %s q:%s Peer:%s " % 
+                                (msg_uuid,self.signal_quality(rf_rssi,rf_snr),node_uuid))
                     self.beacon_type = self.MSG_TYPE_ACK
-                    self.private_mode_time = time.time()
 
                 elif msg_type == self.MSG_TYPE_BEACON:
                     beacon_hash = group_cleartext[16:48]
@@ -394,11 +431,13 @@ class Message(Thread):
                             self.beacon_type = self.MSG_TYPE_BEACON_ENGAGE
                         else:
                             self.engage_ignore_list.remove(node_uuid)
-                    elif beacon_hash == self.beacon_hash and self.private_mode != self.PRIVATE_MODE_DISABLED:
-                        self.private_mode_disabled_req = True
 
                     if self.private_mode == self.PRIVATE_MODE_DISABLED:
                         self.beacon_ack_list = []
+                                                   
+                    elif beacon_hash == self.beacon_hash and self.private_mode != self.PRIVATE_MODE_DISABLED:
+                        self.private_mode_disabled_req = True
+
 
                     self.beacons_recvd[packet_author] = (packet_sent_time, rf_rssi, rf_snr)
                     self.ble_handset_msg_queue.put_nowait([packet_author, 
@@ -410,30 +449,36 @@ class Message(Thread):
                                                            rf_rssi,
                                                            rf_snr]) 
 
-                    self.log.debug("Recv'd Beacon: Peer UUID:%s Beacon UUID:%s Beacon Hash:%s " % 
-                                  (node_uuid,msg_uuid,beacon_hash))
+                    self.log.debug("Recv Beacon q:%s Peer:%s RepeatSt:%s " % 
+                                  (self.signal_quality(rf_rssi,rf_snr),node_uuid,beacon_hash[:8]))
 
                 elif msg_type == self.MSG_TYPE_ACK:
                     beacon_hash = group_cleartext[16:48]
 
                     msg_uuids = re.findall('........',group_cleartext[48:])
                     for msg_uuid in msg_uuids:
+                        #---------------
+                        # Prevent sending messages to nodes that already have them
+                        #---------------
                         if node_uuid in self.disregard_list:
-                            self.disregard_list[node_uuid].append(msg_uuid)
+                            self.disregard_list[node_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[node_uuid] else None
                         else:
                             self.disregard_list[node_uuid] = [msg_uuid]
 
+                        if self.peer_uuid in self.disregard_list:
+                            self.disregard_list[self.peer_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[self.peer_uuid] else None
+                        else:
+                            self.disregard_list[self.peer_uuid] = [msg_uuid]
+                        #----------------
                     self.radio_outbound_queue.queue.clear()
-                    self.private_mode_time = time.time()
-
+ 
                     if beacon_hash == self.beacon_hash:
                         self.private_mode_disabled_req = True
 
-                    self.log.debug("Recv'd ACK: Peer UUID:%s Ack UUID:%s Beacon Hash:%s " % 
-                                  (node_uuid,msg_uuid,beacon_hash))
+                    self.log.debug("Recv ACK q:%s Peer:%s RepeatSt:%s " % 
+                                  (self.signal_quality(rf_rssi,rf_snr),node_uuid,beacon_hash[:8]))
 
                 elif msg_type == self.MSG_TYPE_BEACON_ENGAGE:
-                    node_uuid = group_cleartext[8:16]
                     peer_uuid = group_cleartext[:8]
                     if node_uuid == self.config.node_uuid:
                         self.engage_ignore_list = []
@@ -456,8 +501,8 @@ class Message(Thread):
                         tx_time = ord(group_cleartext[22:23])
                         tx_deadband = ord(group_cleartext[23:24])
 
-                        self.log.debug("Recv'd Engage Req: Orig UUID:%s Peer UUID: %s Channel Seed:%s bw:%d sf: %d cr: %d txtime:%d txdb:%d pow:%d" % 
-                                      (node_uuid,self.peer_uuid,ch_seed,bw,sf,cr,tx_time,tx_deadband,tx_power))
+                        self.log.debug("Recv Engage Req q:%s Peer: %s Channel Seed:%s bw:%d sf: %d cr: %d txsec:%d txdbsec:%d pow:%d" % 
+                                      (self.signal_quality(rf_rssi,rf_snr),self.peer_uuid,ch_seed,bw,sf,cr,tx_time,tx_deadband,tx_power))
                     
                         #Process/Execute Engagement
                         self.config.e_ch_seed = ch_seed
@@ -468,16 +513,14 @@ class Message(Thread):
                         self.config.e_tx_time = tx_time
                         self.config.e_tx_deadband = tx_deadband
                         self.config.req_update_network = True
-                        #self.fill_outbound_queue()
-                        #self.event.wait(1)
                         self.private_mode = self.PRIVATE_MODE_PRIMARY
-                        self.private_mode_time = time.time()
                         #self.private_mode_send_flag = True
 
                     else:
                         #This is for someone else, we will not engage peer_uuid this round
                         #Unless there is a opportunity to "tag along" in a listen only mode (3 node network, TODO examples)
-                        self.log.debug("Recv'd Engage Req: Ignored.")
+                        self.log.debug("Recv Engage Req: Ignored.")
+                        self.beacon_type = self.MSG_TYPE_BEACON
                         self.engage_ignore_list.append(node_uuid)
                         self.engage_ignore_list.append(peer_uuid)
                     
@@ -513,6 +556,89 @@ class Message(Thread):
             #self.log.debug("GroupText Len: " +  str(len(self.group_cleartexts)))
         return True
 
+
+    def calculate_bitrate(self,sf,bw,cr):
+        if cr == 1:
+            cr = 4.0/5.0
+        elif cr == 2:
+            cr = 4.0/6.0
+        elif cr == 3:
+            cr = 4.0/7.0
+        elif cr == 4:
+            cr = 4.0/8.0
+
+        if bw == 0:
+            bw = 62.5
+        elif bw == 1:
+            bw = 125.0
+        elif bw == 2:
+            bw = 250.0
+        elif bw == 3:
+            bw = 500.0
+
+        bitrate = sf * (bw / math.pow(2,sf) * cr)
+        return round(bitrate,2)
+
+    def signal_quality(self,rssi,snr):
+        #References
+        #https://www.semtech.com/uploads/documents/sx1272.pdf
+
+        #Strong signals with SNR > 7: RSSI is informant
+        #Weak signals with SNR < 7: SNR is informant (Also SNR SF Limits are appoaching link failure)
+        #Spreadfactor vs rssi/snr
+        #SF7 RSSI > -123 / SNR > -7.5
+        #SF8 RSSI > -126 / SNR > -10.
+        #SF9 RSSI > -129 / SNR > -12.5
+        #SF10 RSSI > -132 / SNR > -15
+        #SF11 RSSI > -134 / SNR > -17.5
+        #SF12 RSSI > -137 / SNR > -20
+        #Look at these ratings, are they reasonable?
+        #print str(rssi) + " " +str(snr)
+        sf = self.config.spread_factor
+        cr = self.config.coding_rate
+        bw = self.config.bandwidth
+        if self.private_mode != self.PRIVATE_MODE_DISABLED:
+            sf = self.config.e_spread_factor
+            cr = self.config.e_coding_rate
+            bw = self.config.e_bandwidth
+
+        # Based on BW 125khz
+        if sf == 7:
+            snr_limit = -7.5
+        elif sf == 8:
+            snr_limit = -10
+        elif sf == 9:
+            snr_limit = -12.5
+        elif sf == 10:
+            snr_limit = -15
+        elif sf == 11:
+            snr_limit = -17.5
+        elif sf == 12:
+            snr_limit = -20
+
+        if snr < 0:
+            quality_value = rssi + (snr * 0.25)
+        else:
+            rssi = (16/15) * rssi
+            quality_value = rssi * 0.25
+
+        #self.log.debug("Quality Value: " + str(quality_value) + " RSSI / SNR: " + str(rssi) + " / " + str(snr))
+        
+        #Completely made up
+        if quality_value > -10:
+                quality = "GREAT"
+        elif quality_value > -40:
+                quality = "GOOD"
+        elif quality_value > -80:
+                quality = "OK"
+        elif quality_value > -120:
+                quality = "POOR"
+        else:
+                quality = "BAD"
+
+
+        return quality
+
     def check_for_test_messages(self):
         try:
             if os.path.isfile("/dscdata/sendmsg"):
@@ -523,7 +649,119 @@ class Message(Thread):
                         msg = line.strip()
                 if msg != "":
                     if "echo" in msg:
-                        self.process_outbound_packet(self.MSG_TYPE_ECHO_REQ, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_ECHO_REQ, msg[:200])                        
+                    elif "100" in msg:
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                    elif "10" in msg:
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
+                        self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
                     else:
                         self.process_outbound_packet(self.MSG_TYPE_MESSAGE, msg[:200])
     
