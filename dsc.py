@@ -1,16 +1,13 @@
 #!/usr/bin/python
 # ---------------------------------------
 # --- Dirt Simple Comms DSCv3 MAIN Thread
-#----------------------------------------
+# ----------------------------------------
 import signal
-import time
-import subprocess
 import logging
 import Queue
-import threading
 import RPi.GPIO as GPIO
 from time import sleep
-
+import time
 import iodef
 
 from message import Message
@@ -22,8 +19,8 @@ from gps import Gps
 from config import Config
 
 version = "v0.5.0"
-revision = "?"              #grab this from git
-isRunning = True            #Main Thread Control Bit
+revision = "?"              # grab this from git
+isRunning = True            # Main Thread Control Bit
 
 radio = None
 display = None
@@ -34,7 +31,8 @@ heartbeat_display = Queue.Queue()
 heartbeat_radio = Queue.Queue()
 heartbeat_message = Queue.Queue()
 
-def signal_handler(signal, frame): #nicely shut things down
+
+def signal_handler(signal, frame):  # nicely shut things down
     quitdsc()
 
 
@@ -51,6 +49,7 @@ def quitdsc():
     global isRunning
 
     isRunning = False
+
 
 if __name__ == "__main__":
     log = logging.getLogger()
@@ -76,7 +75,7 @@ if __name__ == "__main__":
     log.info('+----------------------------+')
 
 
-    #log.debug("hg rev: " + revision)
+    # log.debug("hg rev: " + revision)
   
     config = Config()
     log.info("HW Rev: " + str(config.hw_rev))
@@ -93,7 +92,7 @@ if __name__ == "__main__":
     message = Message(crypto, config, heartbeat_message)
     message.start()
 
-    radio = Radio("/dev/serial0",config, message, heartbeat_radio)
+    radio = Radio("/dev/serial0", config, message, heartbeat_radio)
     radio.start()
 
     gps = Gps()
@@ -103,12 +102,12 @@ if __name__ == "__main__":
         display = Display(message, version, config, revision, heartbeat_display)
         display.start()
 
-        ui = UI(display,message, crypto, radio, config,heartbeat_ui)
+        ui = UI(display, message, crypto, radio, config, heartbeat_ui)
         ui.start()
         ui.splash()
 
     if config.hw_rev >= 3:
-        dscGatt = ble_gatt.DscGatt(quitdsc, message,config,radio)
+        dscGatt = ble_gatt.DscGatt(quitdsc, message, config, radio)
         dscGatt.start()
 
     """
@@ -136,27 +135,27 @@ if __name__ == "__main__":
                     log.info("Shutting the system down in 60 seconds.")
                     # Shutdown timer --> do it
 
-                #if GPIO.input(iodef.PIN_TILT):
+                # if GPIO.input(iodef.PIN_TILT):
                 #    log.info("Tilted.")
-                #else:
+                # else:
                 #    log.info("Not Tilted.")
                 if config.hw_rev < 3:
                     try:
                         packet = heartbeat_ui.get_nowait()
-                    except Queue.Empty: # Thread possibly dead, start re-covery timer and log
+                    except Queue.Empty:  # Thread possibly dead, start re-covery timer and log
                         log.error("UI Thread seems to be dead.")
                     try:
                         packet = heartbeat_display.get_nowait()
-                    except Queue.Empty: # Thread possibly dead, start re-covery timer and log
+                    except Queue.Empty:  # Thread possibly dead, start re-covery timer and log
                         log.error("Display Thread seems to be dead.")
                 try:
                     packet = heartbeat_radio.get_nowait()
-                except Queue.Empty: # Thread possibly dead, start re-covery timer and log
+                except Queue.Empty:  # Thread possibly dead, start re-covery timer and log
                     log.error("Radio Thread seems to be dead.")
                 try:
                     packet = heartbeat_message.get_nowait()
-                except Queue.Empty: # Thread possibly dead, start re-covery timer and log
-                  log.error("Message Thread seems to be dead.")
+                except Queue.Empty:  # Thread possibly dead, start re-covery timer and log
+                    log.error("Message Thread seems to be dead.")
 
             elif time.time() - heartbeat_time < 0:
                     log.warn("Time changed to past. Re-initializing.")

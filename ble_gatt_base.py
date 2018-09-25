@@ -17,17 +17,22 @@ GATT_DESC_IFACE =    'org.bluez.GattDescriptor1'
 class InvalidArgsException(dbus.exceptions.DBusException):
     _dbus_error_name = 'org.freedesktop.DBus.Error.InvalidArgs'
 
+
 class NotSupportedException(dbus.exceptions.DBusException):
     _dbus_error_name = 'org.bluez.Error.NotSupported'
+
 
 class NotPermittedException(dbus.exceptions.DBusException):
     _dbus_error_name = 'org.bluez.Error.NotPermitted'
 
+
 class InvalidValueLengthException(dbus.exceptions.DBusException):
     _dbus_error_name = 'org.bluez.Error.InvalidValueLength'
 
+
 class FailedException(dbus.exceptions.DBusException):
     _dbus_error_name = 'org.bluez.Error.Failed'
+
 
 class Service(dbus.service.Object):
     """
@@ -77,6 +82,7 @@ class Service(dbus.service.Object):
             raise InvalidArgsException()
 
         return self.get_properties()[GATT_SERVICE_IFACE]
+
 
 class Characteristic(dbus.service.Object):
     """
@@ -154,6 +160,7 @@ class Characteristic(dbus.service.Object):
     def PropertiesChanged(self, interface, changed, invalidated):
         pass
 
+
 class Descriptor(dbus.service.Object):
     """
     org.bluez.GattDescriptor1 interface implementation
@@ -198,6 +205,7 @@ class Descriptor(dbus.service.Object):
     def WriteValue(self, value, options):
         print('Default WriteValue called, returning error')
         raise NotSupportedException()
+
 
 def find_adapter(bus):
     remote_om = dbus.Interface(bus.get_object(BLUEZ_SERVICE_NAME, '/'),

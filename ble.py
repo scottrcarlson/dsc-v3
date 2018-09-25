@@ -3,14 +3,11 @@ import dbus
 import dbus.service
 import dbus.mainloop.glib
 from sh import btmgmt
-import json
-import sys
 try:
-  from gi.repository import GObject
+    from gi.repository import GObject
 except ImportError:
-  import gobject as GObject
+    import gobject as GObject
 import signal
-import sys
 import logging
 BUS_NAME = 'org.bluez'
 AGENT_INTERFACE = 'org.bluez.Agent1'
@@ -21,6 +18,7 @@ device_obj = None
 dev_path = None
 mainloop = None
 log = logging.getLogger()
+
 
 def init_ble():
     btmgmt.power.off()
@@ -36,7 +34,7 @@ def init_ble():
     btmgmt.advertising.on()
     btmgmt.power.on()
     btmgmt.name("DSC2")
-    #btmgmt("io-cap","0x04") #DisplayKeyboard (for Numeric Comparison type pairing)
+    # btmgmt("io-cap","0x04") #DisplayKeyboard (for Numeric Comparison type pairing)
     log.debug("Initialized.")
     log.debug("interface: " + get_device_info()['interface'])
     log.debug("address: " + get_device_info()['address'])
@@ -57,24 +55,28 @@ def get_device_info():
     results['alias'] = info_lines[6].split(' ')[1]
     return results
 
+
 def ask(prompt):
     try:
         return raw_input(prompt)
-    except:
+    except Exception:
         return input(prompt)
 
+
 def set_trusted(path):
-    props = dbus.Interface(bus.get_object("org.bluez", path),
-                    "org.freedesktop.DBus.Properties")
+    props = dbus.Interface(bus.get_object("org.bluez", path), "org.freedesktop.DBus.Properties")
     props.Set("org.bluez.Device1", "Trusted", True)
+
 
 def dev_connect(path):
     dev = dbus.Interface(bus.get_object("org.bluez", path),
                             "org.bluez.Device1")
     dev.Connect()
 
+
 class Rejected(dbus.DBusException):
     _dbus_error_name = "org.bluez.Error.Rejected"
+
 
 class Agent(dbus.service.Object):
     exit_on_release = True
@@ -82,39 +84,36 @@ class Agent(dbus.service.Object):
     def set_exit_on_release(self, exit_on_release):
         self.exit_on_release = exit_on_release
 
-    @dbus.service.method(AGENT_INTERFACE,
-                    in_signature="", out_signature="")
+    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Release(self):
         log.debug("Release")
         if self.exit_on_release:
             mainloop.quit()
 
-    @dbus.service.method(AGENT_INTERFACE,
-                    in_signature="ouq", out_signature="")
+    @dbus.service.method(AGENT_INTERFACE, in_signature="ouq", out_signature="")
     def DisplayPasskey(self, device, passkey, entered):
-        log.debug("DisplayPasskey (%s, %06u entered %u)" 
-            % (device, passkey, entered))
+        log.debug("DisplayPasskey (%s, %06u entered %u)" % (device, passkey, entered))
 
-    @dbus.service.method(AGENT_INTERFACE,
-                    in_signature="ou", out_signature="")
+    @dbus.service.method(AGENT_INTERFACE, in_signature="ou", out_signature="")
     def RequestConfirmation(self, device, passkey):
         log.debug("RequestConfirmation (%s, %06d)" % (device, passkey))
-        log.debug(build_pair_req_msg(device, passkey))
+        # log.debug(build_pair_req_msg(device, passkey))
         confirm = ask("Confirm passkey (yes/no): ")
         if (confirm == "yes"):
             pair_reply(device)
             return
         raise Rejected("Passkey doesn't match")
 
-    @dbus.service.method(AGENT_INTERFACE,
-                    in_signature="", out_signature="")
+    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Cancel(self):
         log.debug("Cancel")
+
 
 def pair_reply(device):
     set_trusted(device)
     log.debug("Device paired")
     mainloop.quit()
+
 
 def pair_error(error):
     err_name = error.get_dbus_name()
@@ -125,20 +124,21 @@ def pair_error(error):
         log.debug("Creating device failed: %s" % (error))
     mainloop.quit()
 
+
 if __name__ == '__main__':
     log.debug("Active Pairing Agent")
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    init_ble();
-    btmgmt.bondable.on();
+    init_ble()
+    btmgmt.bondable.on()
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
 
     capability = "KeyboardDisplay"
     path = "/test/agent"
-    #agent = Agent(bus, path)
+    # agent = Agent(bus, path)
 
     mainloop = GObject.MainLoop()
-    obj = bus.get_object(BUS_NAME, "/org/bluez");
+    obj = bus.get_object(BUS_NAME, "/org/bluez")
     manager = dbus.Interface(obj, "org.bluez.AgentManager1")
     manager.RegisterAgent(path, capability)
     manager.RequestDefaultAgent(path)
@@ -151,3 +151,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     btmgmt.bondable.off()
+

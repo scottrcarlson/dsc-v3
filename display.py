@@ -5,16 +5,15 @@ from time import sleep
 import RPi.GPIO as GPIO
 from oled.device import ssd1306, sh1106
 from oled.render import canvas
-from PIL import ImageDraw, Image, ImageFont
+from PIL import Image, ImageFont
 import iodef
-import os
 from threading import *
 import screen as scr
 import time
 import logging
 
 
-#DISPLAY MODES
+# DISPLAY MODES
 m_IDLE = 0
 m_SETTINGS = 1
 m_SPLASH = 2
@@ -34,6 +33,7 @@ m_LOCK=15
 
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
+
 class Display(Thread):
     def __init__(self, message, version, config, sw_rev, heartbeat):
         Thread.__init__(self)
@@ -43,21 +43,21 @@ class Display(Thread):
         self.heartbeat = heartbeat
         
         if sw_rev == 1:
-            self.reset() #Needed for V2
+            self.reset()  # Needed for V2
 
         self.config = config
         self.version = version
         self.sw_rev = sw_rev
         self.message = message
 
-    	# TODO: gracefully handle exception when OLED absent
+        # TODO: gracefully handle exception when OLED absent
         if self.config.hw_rev == 1:
             self.device = sh1106(port=1, address=0x3C)
         else:
-            #self.device = Adafruit_SSD1306.SSD1306_128_64(rst=24)
+            # self.device = Adafruit_SSD1306.SSD1306_128_64(rst=24)
             self.device = ssd1306(port=1, address=0x3C)
         self.font = ImageFont.load_default()
-        #self.font = ImageFont.truetype("5by7.ttf",10)
+        # self.font = ImageFont.truetype("5by7.ttf",10)
         self.mode = m_IDLE
 
         self.row_index = 0
@@ -90,7 +90,7 @@ class Display(Thread):
 
         self.log_tail_results = []
 
-        self.reg_stage = 1   #WNode Registration Stage. 1/Name,2/NetKey,3/GrpKey
+        self.reg_stage = 1   # WNode Registration Stage. 1/Name,2/NetKey,3/GrpKey
         self.log.info("Initialized Display Thread.")
 
     def log_tail(self,f, n):
@@ -128,12 +128,12 @@ class Display(Thread):
                     heartbeat_time = time.time()
             except Exception as e:
                 self.log.error(str(e))
-            #------[IDLE]--------------------------------------------------------------------------
+            # ------[IDLE]--------------------------------------------------------------------------
             if self.mode == m_IDLE:
                 with canvas(self.device) as draw:
                     #Does this cost energy? Should we only do this first pass?
                     pass
-            #------[SPLASH SCREEN]------------------------------------------------------------------$
+            # ------[SPLASH SCREEN]------------------------------------------------------------------$
             elif self.mode == m_SPLASH:
                 with canvas(self.device) as draw:
                     logo = Image.open('/home/pi/dsc.png')
@@ -141,7 +141,7 @@ class Display(Thread):
                     draw.bitmap((0, 10), logo, fill=1)
                     draw.text((0,40), "    Press any key    ", font=self.font, fill=255)
                     draw.text((0,50), "   Register Device   ", font=self.font, fill=255)
-            #------[LOCK SCREEN]------------------------------------------------------------------$
+            # ------[LOCK SCREEN]------------------------------------------------------------------$
             elif self.mode == m_LOCK:
                 with canvas(self.device) as draw:
                     logo = Image.open('/home/pi/dsc.png')
@@ -149,7 +149,7 @@ class Display(Thread):
                     draw.bitmap((0, 10), logo, fill=1)
                     draw.text((0,40), "LEFT + BACK to Unlock", font=self.font, fill=255)
                     draw.text((0,50), "       New Msgs",font=self.font, fill=255)
-            #------[LOG VIEWER]------------------------------------------------------------------$
+            # ------[LOG VIEWER]------------------------------------------------------------------$
             elif self.mode == m_LOG_VIEWER:
                 try:
                     if time.time() - log_time > 1:
@@ -162,7 +162,7 @@ class Display(Thread):
                 except Exception as e:
                     self.log.error(str(e))
                 
-            #------[MAIN MENU]----------------------------------------------------------------------
+            # ------[MAIN MENU]----------------------------------------------------------------------
             elif self.mode == m_MAIN_MENU:
                 try:
                     with canvas(self.device) as draw:
@@ -175,7 +175,7 @@ class Display(Thread):
                         elif self.row_index >= self.viz_max:
                             self.viz_max = self.row_index + 1
                             self.viz_min = self.viz_max - self.screen_row_size
-                        #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                        # print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
                         for i in range(0,len(scr.main_menu)):
                             draw.text((5, 4+( (i-self.viz_min) * self.row_height) ), scr.main_menu[i], font=self.font, fill=255)
                         
@@ -186,7 +186,7 @@ class Display(Thread):
                         draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '>', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
-            #------[SETTINGS SCREEN]------------------------------------------------------------------$     
+            # ------[SETTINGS SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_SETTINGS:
                 viz_min = 0
                 viz_max = 4
@@ -226,7 +226,7 @@ class Display(Thread):
                                 value = self.config.tx_deadband    
                             draw.text((0, dY), scr.network_settings_menu[i] + str(value), font=self.font, fill=255)
                         
-                        #print "VizMin: ", viz_min, " VizMax:", viz_max, " Index:", self.row_index
+                        # print "VizMin: ", viz_min, " VizMax:", viz_max, " Index:", self.row_index
 
                         self.cursor_x = len(scr.network_settings_menu[self.row_index]) * 6
                         self.cursor_y = self.row_height * (self.row_index + 1) - (self.row_height * viz_min)
@@ -236,7 +236,7 @@ class Display(Thread):
 
                 except Exception as e:
                     self.log.error(str(e))
-             #------[RF TUNING SCREEN]------------------------------------------------------------------$     
+             # ------[RF TUNING SCREEN]------------------------------------------------------------------$     
             elif self.mode == m_RF_TUNING:
                 viz_min = 0
                 viz_max = 4
@@ -278,7 +278,7 @@ class Display(Thread):
                                 value = self.config.sync_word
                             draw.text((0, dY), scr.rf_tuning_menu[i] + str(value), font=self.font, fill=255)
                         
-                        #print "VizMin: ", viz_min, " VizMax:", viz_max, " Index:", self.row_index
+                        # print "VizMin: ", viz_min, " VizMax:", viz_max, " Index:", self.row_index
 
                         self.cursor_x = len(scr.rf_tuning_menu[self.row_index]) * 6
                         self.cursor_y = self.row_height * (self.row_index + 1) - (self.row_height * viz_min)
@@ -287,7 +287,7 @@ class Display(Thread):
                         self.cursor = not self.cursor
                 except Exception as e:
                     self.log.error(str(e))
-            #------[STATUS SCREEN]------------------------------------------------------------------$
+            # ------[STATUS SCREEN]------------------------------------------------------------------$
             elif self.mode == m_STATUS:
                 try:
                     with canvas(self.device) as draw:
@@ -315,7 +315,7 @@ class Display(Thread):
                             row += 1
                 except Exception as e:
                     self.log.error(str(e))
-            #------[DIALOG]-------------------------------------------------------------------    $
+            # ------[DIALOG]-------------------------------------------------------------------    $
             elif self.mode == m_DIALOG:
                 if self.dialog_confirmed:
                     self.dialog_confirmed = False
@@ -327,7 +327,7 @@ class Display(Thread):
                     draw.text((0, 0), self.dialog_msg, font=self.font, fill=255)
                     draw.text((0, 10), self.dialog_msg2, font=self.font, fill=255)
                     draw.text((0, 20), self.dialog_msg3, font=self.font, fill=255)
-            #------[DIALOG TASK]------------------------------------------------------------------$
+            # ------[DIALOG TASK]------------------------------------------------------------------$
             elif self.mode == m_DIALOG_TASK:
                 if self.dialog_task_done:
                     self.dialog_task_done = False
@@ -339,7 +339,7 @@ class Display(Thread):
                     draw.text((0, 0), self.dialog_msg, font=self.font, fill=255)
                     draw.text((0, 10), self.dialog_msg2, font=self.font, fill=255)
                     draw.text((0, 20), self.dialog_msg3, font=self.font, fill=255)
-            #------[DIALOG YESNO]-----------------------------------------------------------------$
+            # ------[DIALOG YESNO]-----------------------------------------------------------------$
             elif self.mode == m_DIALOG_YESNO:
                 with canvas(self.device) as draw:
                     draw.text((0, 0), self.dialog_msg, font=self.font, fill=255)
@@ -349,7 +349,7 @@ class Display(Thread):
                         draw.text((30, 40), '<NO>     YES ', font=self.font, fill=255)
                     elif self.col_index == 1:
                         draw.text((30, 40), ' NO     <YES> ', font=self.font, fill=255)
-           #------[MSG COMPOSE MENU]-------
+           # ------[MSG COMPOSE MENU]-------
             elif self.mode == m_COMPOSE_MENU:
                 try:
                     with canvas(self.device) as draw:
@@ -374,7 +374,7 @@ class Display(Thread):
                         draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
-            #------[MSG THREAD VIEWER]-------
+            # ------[MSG THREAD VIEWER]-------
             elif self.mode == m_MSG_VIEWER:
                 try:
                     with canvas(self.device) as draw:
@@ -386,7 +386,7 @@ class Display(Thread):
                         if (self.row_index >= self.viz_max):
                             self.viz_max = self.row_index + 1
                             self.viz_min = self.viz_max - self.screen_row_size
-                        #print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
+                        # print "Row Index: ", self.row_index, " Viz_Min:", self.viz_min, " Viz_Max:", self.viz_max
                         group_cleartexts = self.message.group_cleartexts
 
                         if len(group_cleartexts) == 0:
@@ -415,9 +415,9 @@ class Display(Thread):
                                         else:
                                             self.horiz_reset_cnt += 1
 
-                                    draw.text((6, 4+( (i-self.viz_min) * self.row_height) ), group_cleartexts[i][hmin:hmax], font=self.font, fill=255)
+                                    draw.text((6, 4 + ((i - self.viz_min) * self.row_height) ), group_cleartexts[i][hmin:hmax], font=self.font, fill=255)
                                 else:
-                                    draw.text((6, 4+( (i-self.viz_min) * self.row_height) ), group_cleartexts[i], font=self.font, fill=255)
+                                    draw.text((6, 4 + ((i - self.viz_min) * self.row_height) ), group_cleartexts[i], font=self.font, fill=255)
 
                             if self.horiz_start_cnt == 3:
                                 self.horiz_index += 1
@@ -425,16 +425,16 @@ class Display(Thread):
                                 self.horiz_start_cnt += 1
 
                             if len(group_cleartexts[self.row_index]) > self.screen_col_size - 1:
-                                draw.text((0, 4 + (self.row_height* (self.row_index - self.viz_min))), '+', font=self.font, fill=255)    
+                                draw.text((0, 4 + (self.row_height * (self.row_index - self.viz_min))), '+', font=self.font, fill=255)
                             else:
-                                draw.text((0, 4 + (self.row_height* (self.row_index - self.viz_min))), '>', font=self.font, fill=255)    
-                        draw.line((121,60,124,63), fill=255)
-                        draw.line((124,63,127,60), fill=255)
+                                draw.text((0, 4 + (self.row_height * (self.row_index - self.viz_min))), '>', font=self.font, fill=255)
+                        draw.line((121, 60, 124, 63), fill=255)
+                        draw.line((124, 63, 127, 60), fill=255)
 
-                        #draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
+                        # draw.text((0, 4 + (12* (self.row_index - self.viz_min))), '|', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
-          #------[COMPOSE MSG]----------------------------------------------------------------
+            # ------[COMPOSE MSG]----------------------------------------------------------------
             elif self.mode == m_COMPOSE:
                 try:
                     self.row = 51 + (self.row_index * self.row_height)
@@ -446,8 +446,8 @@ class Display(Thread):
                         if len(self.message.compose_msg) > self.horiz_max:
                             msg_line1 = self.message.compose_msg[:self.horiz_max]
                             if len(self.message.compose_msg) > self.horiz_max * 2:
-                                msg_line2 = self.message.compose_msg[self.horiz_max:self.horiz_max*2]
-                                msg_line3 = self.message.compose_msg[self.horiz_max*2:]
+                                msg_line2 = self.message.compose_msg[self.horiz_max:self.horiz_max * 2]
+                                msg_line3 = self.message.compose_msg[self.horiz_max * 2:]
                             else:
                                 msg_line2 = self.message.compose_msg[self.horiz_max:]
                         else:
@@ -464,7 +464,7 @@ class Display(Thread):
                             if self.key_repeating:
                                 self.cursor = True
                             if self.cursor:
-                                draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
+                                draw.line((self.col, self.row, self.char_size + self.col, self.row), fill=255)
                             self.cursor = not self.cursor
                         else:
                             if self.col_index == 0:
@@ -474,10 +474,10 @@ class Display(Thread):
                             elif self.col_index == 2:
                                 draw.text((0, 28), ' SND  SPC <CLR> BAIL ', font=self.font, fill=255)
                             elif self.col_index == 3:
-                                draw.text((0, 28), ' SND  SPC  CLR <BAIL>' , font=self.font, fill=255)
+                                draw.text((0, 28), ' SND  SPC  CLR <BAIL>', font=self.font, fill=255)
                 except Exception as e:
                     self.log.error(str(e))
-          #------[DEVICE REGISTRATION]----------------------------------------------------------------------
+            # ------[DEVICE REGISTRATION]----------------------------------------------------------------------
             elif self.mode == m_REG:
                 try:
                     self.row = 51 + (self.row_index * self.row_height)
@@ -515,7 +515,7 @@ class Display(Thread):
                             if self.key_repeating:
                                 self.cursor = True
                             if self.cursor:
-                                draw.line((self.col, self.row, self.char_size+self.col, self.row), fill=255)
+                                draw.line((self.col, self.row, self.char_size + self.col, self.row), fill=255)
                         else:
                             if self.col_index == 0:
                                 if self.reg_stage == 4:

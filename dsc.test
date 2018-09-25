@@ -1,0 +1,17 @@
+[Network]
+name =bob
+tdma_slot = 1
+tdma_total_slots = 3
+tx_time = 3
+tx_deadband = 2
+netsecret =aaa       
+grpsecret =bbb 
+airplane_mode = False
+poll_test_config = True
+
+[Radio]
+bw = 3
+cr = 2
+sf = 10
+power = 26
+

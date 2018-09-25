@@ -1,16 +1,15 @@
 #!/usr/bin/python
 # ----------------------------
 # --- GPS Helper Classes
-#----------------------------
+# ----------------------------
 from threading import *
 import serial
 import pynmea2
-import sys
 import logging
 
 # http://www.gpsinformation.org/dale/nmea.htm
-#$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
-#Where:
+# $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+# Where:
 #     GGA          Global Positioning System Fix Data
 #     123519       Fix taken at 12:35:19 UTC
 #     4807.038,N   Latitude 48 deg 07.038' N
@@ -19,11 +18,11 @@ import logging
 #                               1 = GPS fix (SPS)
 #                               2 = DGPS fix
 #                               3 = PPS fix
-#			       4 = Real Time Kinematic
-#			       5 = Float RTK
+# 			       4 = Real Time Kinematic
+# 			       5 = Float RTK
 #                               6 = estimated (dead reckoning) (2.3 feature)
-#			       7 = Manual input mode
-#			       8 = Simulation mode
+# 			       7 = Manual input mode
+# 			       8 = Simulation mode
 #     08           Number of satellites being tracked
 #     0.9          Horizontal dilution of position
 #     545.4,M      Altitude, Meters, above mean sea level
@@ -35,13 +34,14 @@ import logging
 
 GPS_SERIAL_DEVICE = '/dev/ttyACM0'
 
+
 class Gps(Thread):
 	def __init__(self):
 		Thread.__init__(self)
 		self.event = Event()
 		self.log = logging.getLogger()
-		self.gps_enable = True # Expose to UI / Save Persistently
-		self.gps_avail = True  # First Pass will set this correctly and log results once. 
+		self.gps_enable = True  # Expose to UI / Save Persistently
+		self.gps_avail = True   # First Pass will set this correctly and log results once.
 		self.gps_quality = 0
 		self.num_sats = 0
 		self.gps_timestamp = 0
@@ -59,7 +59,7 @@ class Gps(Thread):
 					try:
 						com = serial.Serial(GPS_SERIAL_DEVICE, timeout=5.0)
 					except serial.SerialException:
-						if self.gps_avail: # Falling Edge will Log Missing
+						if self.gps_avail:  # Falling Edge will Log Missing
 							self.log.warning("GPS device missing")
 						self.gps_avail = False
 						self.event.wait(15)
@@ -70,7 +70,7 @@ class Gps(Thread):
 						data = com.read()
 						for msg in reader.next(data):
 							parsed = pynmea2.parse(str(msg))
-							#print parsed
+							# print parsed
 							try:
 								if isinstance(parsed, pynmea2.types.talker.GGA):
 									self.gps_quality = parsed.gps_qual
@@ -90,12 +90,12 @@ class Gps(Thread):
 
 										# log lat+long that can be parsed by http://maps.google.com
 										self.log.debug("lat long:" + self.lat + " " + self.long + " alt:" +
-													   self.alt + "(" + self.alt_unit + ")")
+																	 self.alt + "(" + self.alt_unit + ")")
 							except Exception as e:
 								self.gps_avail = False
 								self.log.error(str(e))
 					except Exception as e:
-						# Force Reconnect 
+						# Force Reconnect
 						com = None
 						self.gps_avail = False
 						self.log.error("GPS device lost.")
@@ -104,5 +104,3 @@ class Gps(Thread):
 	def stop(self):
 		self.log.info("Stopping GPS Thread.")
 		self.event.set()
-
-		

@@ -1,22 +1,17 @@
 #!/usr/bin/python
 # ----------------------------
 # --- DSC3 UI THREAD
-#----------------------------
+# ----------------------------
 import time
-from time import sleep
 import RPi.GPIO as GPIO
 import iodef
-from oled.device import ssd1306, sh1106
-from oled.render import canvas
-from PIL import ImageDraw, Image, ImageFont
 from threading import *
 import os
 import screen as scr
 import logging
-import Queue
 import subprocess
 
-#DISPLAY MODES
+# DISPLAY MODES
 m_IDLE = 0
 m_SETTINGS = 1
 m_SPLASH = 2
@@ -31,28 +26,29 @@ m_DIALOG_TASK = 11
 m_REG = 12
 m_STATUS = 13
 m_RF_TUNING = 14
-m_LOCK=15
+m_LOCK = 15
 
-#DIALOG COMMAND (If Yes is Chosen)
+# DIALOG COMMAND (If Yes is Chosen)
 cmd_SHUTDOWN = 0
 cmd_CLEARMSGS = 1
 cmd_MANUALSYNCCLK = 2
 
 keyboard = "abcdefghijklmnopqrstuvwxyz1234567890!?$%.-"
 
+
 class UI(Thread):
     def __init__(self, display, message, crypto, radio, config, heartbeat):
         Thread.__init__(self)
         self.event = Event()
         self.log = logging.getLogger()
-        #self.log.setLevel(logging.INFO)
+        # self.log.setLevel(logging.INFO)
 
         self.heartbeat = heartbeat
 
         self.active_high = True
         bounce_time = 80
         if config.hw_rev != 1:
-            bounce_time = 175 #HW Rev2 has no hardware debouncing
+            bounce_time = 175  # HW Rev2 has no hardware debouncing
             self.active_high = False
 
         GPIO.add_event_detect(iodef.PIN_KEY_UP, GPIO.FALLING, callback=self.key_up, bouncetime=bounce_time)
@@ -69,11 +65,11 @@ class UI(Thread):
         self.crypto = crypto
         self.message = message
         self.config = config
-        self.radio = radio 
+        self.radio = radio
 
         self.is_idle = False
 
-        self.key_repeat = -1 # -1/None 0/Left 1/Right
+        self.key_repeat = -1  # -1/None 0/Left 1/Right
         self.key_repeat_rate = 0.08
         self.key_repeat_delay = 0.5
         self.dialog_delay = 0
@@ -97,7 +93,7 @@ class UI(Thread):
                         self.heartbeat.put_nowait("hb")
                 elif time.time() - heartbeat_time < 0:
                         self.log.warn("Time changed to past. Re-initializing.")
-                        heartbeat_time = time.time() 
+                        heartbeat_time = time.time()
                 if self.display.mode == m_DIALOG:
                     if dialog_time == 0:
                         dialog_time = time.time()
@@ -126,7 +122,7 @@ class UI(Thread):
                 if time.time() - key_repeat_time > self.key_repeat_rate:
                     key_repeat_time = time.time()
                     if time.time() - key_delay_time > self.key_repeat_delay:
-                        if self.key_repeat == 1: #Left Key Repeat
+                        if self.key_repeat == 1:  # Left Key Repeat
                             if GPIO.input(iodef.PIN_KEY_LEFT) == self.active_high:
                                 self.display.key_repeating = True
                                 self.display.col_index -= 1
@@ -142,7 +138,7 @@ class UI(Thread):
                             else:
                                 self.display.key_repeating = False
                                 self.key_repeat = -1
-                        elif self.key_repeat == 2: #Right Key Repeat
+                        elif self.key_repeat == 2:  # Right Key Repeat
                             if GPIO.input(iodef.PIN_KEY_RIGHT) == self.active_high:
                                 self.display.key_repeating = True
                                 self.display.col_index += 1
@@ -158,9 +154,9 @@ class UI(Thread):
                             else:
                                 self.display.key_repeating = False
                                 self.key_repeat = -1
-                elif time.time() - key_repeat_time< 0:
+                elif time.time() - key_repeat_time < 0:
                         self.log.warn("Time changed to past. Re-initializing.")
-                        key_repeat_time = time.time()    
+                        key_repeat_time = time.time()
 
             except Exception as e:
                 self.log.error("Exception: " + str(e))
@@ -177,21 +173,21 @@ class UI(Thread):
         elif self.display.mode == m_MAIN_MENU:
             self.display.mode = m_IDLE
 
-    def lock(self):  #Lock Screen to prevent key presses in pocket.
+    def lock(self):  # Lock Screen to prevent key presses in pocket.
         self.message.compose_msg = ""
         self.display.mode = m_LOCK
 
     def splash(self):
         self.display.mode = m_SPLASH
 
-    def reg(self): 
+    def reg(self):
         self.display.mode = m_REG
 
     def main_menu(self):
         self.display.row_index = 0
         self.display.mode = m_MAIN_MENU
 
-#---------------------------------[KEY UP]-------------------------------------
+# ---------------------------------[KEY UP]-------------------------------------
     def key_up(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
@@ -228,10 +224,10 @@ class UI(Thread):
             if self.display.row_index < 0:
                 self.display.row_index = 0
 
-#---------------------------------[KEY DOWN]-------------------------------------
+# ---------------------------------[KEY DOWN]-------------------------------------
     def key_down(self, channel):
         self.is_idle = False
-        ##print "pressed DOWN Key."
+        # print "pressed DOWN Key."
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
         elif self.display.mode == m_SPLASH:
@@ -247,11 +243,11 @@ class UI(Thread):
         elif self.display.mode == m_MAIN_MENU:
             self.display.row_index += 1
             if self.display.row_index >= len(scr.main_menu):
-                self.display.row_index = len(scr.main_menu) -1
+                self.display.row_index = len(scr.main_menu) - 1
         elif self.display.mode == m_COMPOSE_MENU:
             self.display.row_index += 1
             if self.display.row_index >= len(scr.compose_menu):
-                self.display.row_index = len(scr.compose_menu) -1
+                self.display.row_index = len(scr.compose_menu) - 1
         elif self.display.mode == m_MSG_VIEWER:
             self.display.horiz_index = 0
             self.display.horiz_reset_cnt = 0
@@ -259,7 +255,7 @@ class UI(Thread):
             if len(self.message.group_cleartexts) != 0:
                 self.display.row_index += 1
                 if self.display.row_index >= len(self.message.group_cleartexts):
-                    self.display.row_index = len(self.message.group_cleartexts) -1
+                    self.display.row_index = len(self.message.group_cleartexts) - 1
         elif self.display.mode == m_RF_TUNING:
             self.display.row_index += 1
             if self.display.row_index > 5:
@@ -269,10 +265,10 @@ class UI(Thread):
             if self.display.row_index > 4:
                 self.display.row_index = 4
 
-#---------------------------------[KEY LEFT]-------------------------------------
+# ---------------------------------[KEY LEFT]-------------------------------------
     def key_left(self, channel):
         self.is_idle = False
-        ##print "pressed LEFT Key."
+        # print "pressed LEFT Key."
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
         elif self.display.mode == m_SPLASH:
@@ -288,7 +284,7 @@ class UI(Thread):
                     self.display.row_index = 0
                 else:
                     self.display.row_index = 1
-            self.key_repeat = 1 #Actuate Key Repeating
+            self.key_repeat = 1  # Actuate Key Repeating
         elif self.display.mode == m_DIALOG_YESNO:
             self.display.col_index -= 1
             if self.display.col_index < 0:
@@ -314,7 +310,7 @@ class UI(Thread):
                 self.config.update_coding_rate_eng()
             elif self.display.row_index == 4:
                 self.config.tx_power -= 1
-                if self.config.tx_power < 11: #LL-RXR-27
+                if self.config.tx_power < 11:  # LL-RXR-27
                     self.config.tx_power = 11
             elif self.display.row_index == 5:
                 self.config.sync_word -= 1
@@ -325,7 +321,7 @@ class UI(Thread):
                 self.config.airplane_mode = False
             if self.display.row_index == 1:
                 self.config.tdma_total_slots -= 1
-                if self.config.tdma_total_slots < 2: #Whats the point if not at least 2?!
+                if self.config.tdma_total_slots < 2:  # Whats the point if not at least 2?!
                     self.config.tdma_total_slots = 2
             elif self.display.row_index == 2:
                 self.config.tdma_slot -= 1
@@ -343,10 +339,10 @@ class UI(Thread):
             if GPIO.input(iodef.PIN_KEY_ENTER) == self.active_high:
                 self.main_menu()
 
-#---------------------------------[KEY RIGHT]-------------------------------------
+# ---------------------------------[KEY RIGHT]-------------------------------------
     def key_right(self, channel):
         self.is_idle = False
-        ##print "pressed RIGHT Key."
+        # print "pressed RIGHT Key."
         if self.display.mode == m_IDLE:
             self.display.mode = m_LOCK
         elif self.display.mode == m_SPLASH:
@@ -365,7 +361,7 @@ class UI(Thread):
                     self.display.row_index = 1
                 else:
                     self.display.row_index = 0
-            self.key_repeat = 2 #Actuate Key Repeating
+            self.key_repeat = 2  # Actuate Key Repeating
         elif self.display.mode == m_DIALOG_YESNO:
             self.display.col_index += 1
             if self.display.col_index > 1:
@@ -391,11 +387,11 @@ class UI(Thread):
                 self.config.update_coding_rate_eng()
             elif self.display.row_index == 4:
                 self.config.tx_power += 1
-                if self.config.tx_power > 26: #LL-RXR-27
+                if self.config.tx_power > 26:  # LL-RXR-27
                     self.config.tx_power = 26
             elif self.display.row_index == 5:
                 self.config.sync_word += 1
-                if self.config.sync_word > 1024: 
+                if self.config.sync_word > 1024:
                     self.config.sync_word = 1024
         elif self.display.mode == m_SETTINGS:
             if self.display.row_index == 0:
@@ -409,7 +405,7 @@ class UI(Thread):
             elif self.display.row_index == 4:
                 self.config.tx_deadband += 1
 
-#---------------------------------[KEY ENTER]-------------------------------------                    
+# ---------------------------------[KEY ENTER]-------------------------------------
     def key_enter(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
@@ -421,28 +417,28 @@ class UI(Thread):
                 index = (self.display.row_index * 21) + self.display.col_index
                 if self.display.reg_stage == 1:
                     if len(self.config.alias) < 8:
-                        self.config.alias = self.config.alias + keyboard[index:index+1]
+                        self.config.alias = self.config.alias + keyboard[index:index + 1]
                 elif self.display.reg_stage == 2:
                     if len(self.config.netkey) < 16:
-                        self.config.netkey = self.config.netkey + keyboard[index:index+1]
+                        self.config.netkey = self.config.netkey + keyboard[index:index + 1]
                 elif self.display.reg_stage == 3:
                     if len(self.config.alias) < 16:
-                        self.config.groupkey = self.config.groupkey + keyboard[index:index+1]
+                        self.config.groupkey = self.config.groupkey + keyboard[index:index + 1]
 
             else:
-                if self.display.col_index == 0: # NEXT Field
+                if self.display.col_index == 0:  # NEXT Field
                     self.display.reg_stage += 1
                     if self.display.reg_stage > 4:
                         self.display.reg_stage = 1
 
-                elif self.display.col_index == 1: # DONE. Register node.
+                elif self.display.col_index == 1:  # DONE. Register node.
                     if self.display.reg_stage == 4:
                         self.display.row_index = 0
                         self.display.col_index = 0
                         self.display.dialog_task_done = False
                          
-                        #Pad the keys. Not a great idea. Need to improve this for lazy people.
-                        #Key size has to be 16bytes
+                        # Pad the keys. Not a great idea. Need to improve this for lazy people.
+                        # Key size has to be 16bytes
 
                         self.config.alias = self.config.alias.ljust(8)
                         self.config.netkey = self.config.netkey.ljust(16)
@@ -455,13 +451,13 @@ class UI(Thread):
             if self.display.row_index >= 0:
                 if len(self.message.compose_msg) < self.display.horiz_max * 3:
                     index = (self.display.row_index * 21) + self.display.col_index
-                    self.message.compose_msg = self.message.compose_msg + keyboard[index:index+1]
+                    self.message.compose_msg = self.message.compose_msg + keyboard[index:index + 1]
             else:
                 if self.display.col_index == 0:
                     self.display.dialog_msg = ""
                     self.display.dialog_msg2 = ""
                     self.display.dialog_msg3 = "  Sending Message..."
-                    self.message.process_inbound_packet(self.config.alias, self.message.MSG_TYPE_MESSAGE,self.message.compose_msg)
+                    self.message.process_inbound_packet(self.config.alias, self.message.MSG_TYPE_MESSAGE, self.message.compose_msg)
                     self.display.row_index = 0
                     self.display.col_index = 0
                     self.dialog_delay = 2
@@ -495,7 +491,7 @@ class UI(Thread):
             self.display.col_index = 0
             self.display.mode = m_COMPOSE
         elif self.display.mode == m_MAIN_MENU:
-            self.log.debug( "MainMenu Selected: " +scr.main_menu[self.display.row_index])
+            self.log.debug("MainMenu Selected: " + scr.main_menu[self.display.row_index])
             if self.display.row_index == 0:
                 if self.config.airplane_mode:
                     self.display.dialog_msg3 = " Airplane Mode Active"
@@ -532,7 +528,7 @@ class UI(Thread):
                 self.display.col_index = 0
                 self.display.mode = m_DIALOG_YESNO
         elif self.display.mode == m_DIALOG_YESNO:
-            if self.display.col_index == 1: #Yes Chosen
+            if self.display.col_index == 1:  # Yes Chosen
                 if self.display.dialog_cmd == cmd_SHUTDOWN:
                     self.display.dialog_msg = "DSCv3"
                     self.display.dialog_msg2 = "Shutting Down."
@@ -544,18 +540,16 @@ class UI(Thread):
                     self.display.mode = m_MSG_VIEWER
                 elif self.display.dialog_cmd == cmd_MANUALSYNCCLK:
                     pipe = subprocess.Popen(
-                                ["sudo", "date", '-s', "07/30/17 00:00:00"], # node is also available
-                                stdout=subprocess.PIPE
-                                )
+                            ["sudo", "dat12e", '-s', "07/30/17 00:00:00"],  # node is also available
+                            stdout=subprocess.PIPE)
                     pipe = subprocess.Popen(
-                                ["sudo", "hwclock", '-w'], # node is also available
-                                stdout=subprocess.PIPE
-                                )
+                            ["sudo", "hwclock", '-w'],  # node is also available
+                            stdout=subprocess.PIPE)
                     self.display.mode = self.display.dialog_next_mode
             else:
                 self.display.mode = self.display.dialog_next_mode
 
-#---------------------------------[KEY BACK]-------------------------------------                    
+# ---------------------------------[KEY BACK]-------------------------------------
     def key_back(self, channel):
         self.is_idle = False
         if self.display.mode == m_IDLE:
@@ -565,7 +559,7 @@ class UI(Thread):
         elif self.display.mode == m_MAIN_MENU:
             pass
         elif self.display.mode == m_STATUS:
-            #self.display.mode = m_MAIN_MENU
+            # self.display.mode = m_MAIN_MENU
             self.main_menu()
         elif self.display.mode == m_COMPOSE:
             self.message.compose_msg = self.message.compose_msg[:-1]
@@ -580,11 +574,11 @@ class UI(Thread):
         elif self.display.mode == m_MSG_VIEWER:
             self.main_menu()
         elif self.display.mode == m_RF_TUNING:
-            self.radio.set_params(self.config.freq, 
-                                  self.config.bandwidth, 
-                                  self.config.spread_factor, 
-                                  self.config.coding_rate, 
-                                  self.config.tx_power, 
+            self.radio.set_params(self.config.freq,
+                                  self.config.bandwidth,
+                                  self.config.spread_factor,
+                                  self.config.coding_rate,
+                                  self.config.tx_power,
                                   self.config.sync_word,
                                   True)
             self.main_menu()
