@@ -63,7 +63,7 @@ class Message(Thread):
         self.private_mode = self.PRIVATE_MODE_DISABLED
         self.prev_private_mode = self.PRIVATE_MODE_DISABLED
         self.private_mode_send_flag = False
-        self.private_mode_timeout = 20
+        self.private_mode_timeout = 15
         self.private_mode_time = 0
         self.private_mode_disabled_req = False
         self.private_session_time = 0
@@ -274,7 +274,7 @@ class Message(Thread):
             self.config.e_bandwidth = 3
             self.config.e_spread_factor = 8
             self.config.e_coding_rate = 2
-            self.config.e_tx_time = 4
+            self.config.e_tx_time = 1
             self.config.e_tx_deadband = 1
 
             group_cleartext = (self.config.node_uuid.ljust(8) +
@@ -351,9 +351,10 @@ class Message(Thread):
             self.private_mode_time = time.time()
 
         try:
-            network_plaintext = self.crypto.decrypt(str(self.config.netkey), str(ota_cipher))
+            network_plaintext = self.crypto.decrypt(str(self.config.netkey), ota_cipher)
         except Exception:
             self.log.debug("Failed to decrypt packet.")
+            traceback.print_exc()
         else:
             # self.log.debug("network plaintext:" + binascii.hexlify(network_plaintext))
             # self.log.debug("netkey len: " + str(len(self.config.netkey)) + " grpkey len:" + str(len(self.config.groupkey)))

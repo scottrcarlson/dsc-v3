@@ -113,7 +113,7 @@ class Radio(Thread):
                 self.log.error(str(e))
 
             try:
-                if self.config.registered:
+                if self.config.registered and not self.config.airplane_mode:
                     if not self.is_radio_tx:
                         self.process_inbound_msg()
                     elif self.is_radio_tx and (time.time() - self.last_tx) > self.tx_throttle:

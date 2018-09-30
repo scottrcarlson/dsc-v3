@@ -275,7 +275,7 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
             for c in result:
                 new_value.append(ord(c))
         except Exception:
-            log.error("DSC Package Message ERROR: PackeMsg")
+            log.error("DSC Package Message ERROR: PackageMsg")
         return new_value
 
     def BuildMsgPayload(self):
@@ -309,26 +309,25 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         try:
             outbound_data = self.message.ble_handset_msg_queue.get_nowait()
             self.author, self.radio_uuid, self.msg, self.msgcipher, self.sent_time, packet_ttl, msg_type, self.rssi, self.snr = outbound_data
-            # self.log.debug("Sending Message: " + str(self.message.ble_handset_msg_queue.qsize()))
-            topic = ""
+            # log.debug("Sending Message: " + str(self.message.ble_handset_msg_queue.qsize()))
             if msg_type == self.message.MSG_TYPE_MESSAGE:
                 self.topic = "newmsg"
             elif msg_type == self.message.MSG_TYPE_BEACON:
                 self.topic = "newbeacon"
-            log.debug("Notify Handset Msg: " + self.author + ":" +
-                                                self.radio_uuid + ":" +
-                                                self.msg + ":" +
-                                                str(self.sent_time) + ":" +
-                                                str(packet_ttl) + ":" +
-                                                topic + ":" +
-                                                str(self.rssi) + ":" +
-                                                str(self.snr))
+            # log.debug("Notify Handset Msg: " + self.author + ":" +
+            #                                    self.radio_uuid + ":" +
+            #                                    self.msg + ":" +
+            #                                    str(self.sent_time) + ":" +
+            #                                    str(packet_ttl) + ":" +
+            #                                    topic + ":" +
+            #                                    str(self.rssi) + ":" +
+            #                                    str(self.snr))
             self.value = self.PackageMsg()
             value = []
             for ch in self.value:
                 value.append(dbus.Byte(ch))
             self.PropertiesChanged(gatt.GATT_CHRC_IFACE, {'Value': value}, [])
-            log.debug("Sending handset message from queue")
+            # log.debug("Sending handset message from queue")
         except Queue.Empty:
             pass
             # log.debug("No Messages")
@@ -340,7 +339,7 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         if self.notifying:
             return
         else:
-            self.notify_timer = GObject.timeout_add(5000, self.notify_handset)
+            self.notify_timer = GObject.timeout_add(1000, self.notify_handset)
         self.notifying = True
 
     def StopNotify(self):
@@ -382,10 +381,10 @@ class DSC_Msg_Outbound_Characteristic(gatt.Characteristic):
 
     def sendMsg(self):
         print self.value
-        if self.message.echo_mode:
-            self.message.process_inbound_packet(self.value.split(",")[1].encode("ascii").ljust(8), self.message.MSG_TYPE_ECHO_REQ, self.value.split(",")[0].encode("ascii"))
-        else:    
-            self.message.process_inbound_packet(self.value.split(",")[1].encode("ascii").ljust(8), self.message.MSG_TYPE_MESSAGE, self.value.split(",")[0].encode("ascii"))
+        if "echo" in self.value.split(",")[0]:
+            self.message.process_outbound_packet(self.message.MSG_TYPE_ECHO_REQ, self.value.split(",")[0])
+        else:
+            self.message.process_outbound_packet(self.message.MSG_TYPE_MESSAGE, self.value.split(",")[0])
 
 
 class DSC_Settings_Characteristic(gatt.Characteristic):
@@ -489,7 +488,7 @@ class DSC_Settings_Characteristic(gatt.Characteristic):
             self.config.set_freq(parms['freq'])
             self.config.set_bandwidth(parms['bw'])
             self.config.set_spread_factor(parms['sp_factor'])
-            self.config.set_coding_rate(parms['coding_rate'])
+            self.config.set_coding_rate(parms['coding_rate'] + 1)
             self.config.set_tx_time(parms['tx_time'])
             self.config.set_tx_power(parms['tx_power'])
             self.config.set_sync_word(parms['sync_word'])
