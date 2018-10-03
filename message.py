@@ -92,7 +92,6 @@ class Message(Thread):
                 else:
                     rssi, snr, msg = packet
                     self.process_inbound_packet(msg, rssi, snr)
-                    self.event.wait(0.01)
 
                 if self.prev_private_mode != self.private_mode:
                     self.prev_private_mode = self.private_mode
@@ -123,12 +122,22 @@ class Message(Thread):
         # self.radio_outbound_queue.queue.clear()
         if self.radio_outbound_queue.qsize() == 0:
             for msg_uuid, msg in self.repeat_msg_list:
-                if self.peer_uuid not in self.disregard_list:
+                if msg_uuid not in self.disregard_list:
                     self.radio_outbound_queue.put_nowait(msg)
                 else:
-                    if msg_uuid not in self.disregard_list[self.peer_uuid]:
+                    if self.peer_uuid not in self.disregard_list[msg_uuid]:
                         self.radio_outbound_queue.put_nowait(msg)
         return self.radio_outbound_queue.qsize()
+
+    def update_disregard(self,msg_uuid, node_uuid, peer_uuid):
+        # ---------------
+        # Prevent sending messages to nodes that already have them
+        # ---------------
+        if msg_uuid in self.disregard_list:
+            self.disregard_list[msg_uuid].append(node_uuid) if node_uuid not in self.disregard_list[msg_uuid] else None
+            self.disregard_list[msg_uuid].append(peer_uuid) if peer_uuid not in self.disregard_list[msg_uuid] else None
+        else:
+            self.disregard_list[msg_uuid] = [node_uuid, peer_uuid]
 
     def generate_beacon(self):
         if self.config.registered and not self.config.airplane_mode:
@@ -274,8 +283,8 @@ class Message(Thread):
             self.config.e_bandwidth = 3
             self.config.e_spread_factor = 8
             self.config.e_coding_rate = 2
-            self.config.e_tx_time = 1
-            self.config.e_tx_deadband = 1
+            self.config.e_tx_time = 3
+            self.config.e_tx_deadband = 2
 
             group_cleartext = (self.config.node_uuid.ljust(8) +
                                self.peer_uuid.ljust(8) +
@@ -325,8 +334,8 @@ class Message(Thread):
         # self.log.debug(str(len(ota_cipher)))
         if msg_type == self.MSG_TYPE_MESSAGE or msg_type == self.MSG_TYPE_ECHO_REQ:
             if self.add_msg_to_repeat_list(msg_uuid, ota_cipher):
-                self.network_plaintexts.append(network_plaintext)
                 if self.config.hw_rev <= 2:
+                    self.network_plaintexts.append(network_plaintext)
                     self.process_group_messages()
 
         elif msg_type == self.MSG_TYPE_ACK:
@@ -364,18 +373,13 @@ class Message(Thread):
                 packet_ttl = struct.unpack(">I", network_plaintext[4:8])[0]  # unpack() always returns a tuple
                 system_id = network_plaintext[8:11]
                 msg_uuid = network_plaintext[11:19]
-                msg_type = int(network_plaintext[19:20])
+                try:
+                    msg_type = int(network_plaintext[19:20])
+                except Exception:
+                    print "************* Garbled Message?"
+                    return False
+
                 group_cipher = network_plaintext[20:]
-
-                if msg_type == self.MSG_TYPE_MESSAGE or msg_type == self.MSG_TYPE_ECHO_REQ:
-                    if not self.add_msg_to_repeat_list(msg_uuid, ota_cipher):
-                        self.log.debug("Dropping inbound dup " + str(msg_uuid))
-                        if self.private_mode != self.PRIVATE_MODE_DISABLED:
-                            self.beacon_type = self.MSG_TYPE_ACK
-                            if not self.check_for_dup2(msg_uuid, self.beacon_ack_list):
-                                self.beacon_ack_list.append(msg_uuid)
-                        return False
-
                 group_cleartext = self.crypto.decrypt(str(self.config.groupkey), group_cipher)
                 packet_author = group_cleartext[:8].strip()
                 node_uuid = group_cleartext[8:16]
@@ -383,27 +387,27 @@ class Message(Thread):
                 if msg_type == self.MSG_TYPE_MESSAGE or msg_type == self.MSG_TYPE_ECHO_REQ:
                     group_msg = group_cleartext[16:]
 
-                    # ---------------
-                    # Prevent sending messages to nodes that already have them
-                    # ---------------
-                    if node_uuid in self.disregard_list:
-                        self.disregard_list[node_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[node_uuid] else None
+                    if node_uuid == '':
+                            self.log.error("???????????? empty uuid: " + node_uuid + " peeruuid: " + self.peer_uuid)
                     else:
-                        self.disregard_list[node_uuid] = [msg_uuid]
+                        if not self.add_msg_to_repeat_list(msg_uuid, ota_cipher):
+                            self.log.debug("Dropping inbound dup " + str(msg_uuid))
+                            if self.private_mode != self.PRIVATE_MODE_DISABLED:
+                                self.beacon_type = self.MSG_TYPE_ACK
+                                if not self.check_for_dup2(msg_uuid, self.beacon_ack_list):
+                                    self.beacon_ack_list.append(msg_uuid)
+                            return False
 
-                    if self.peer_uuid in self.disregard_list:
-                        self.disregard_list[self.peer_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[self.peer_uuid] else None
-                    else:
-                        self.disregard_list[self.peer_uuid] = [msg_uuid]
+                        self.update_disregard(msg_uuid, node_uuid, self.peer_uuid)
 
-                    if not self.check_for_dup2(msg_uuid, self.beacon_ack_list):
-                        self.beacon_ack_list.append(msg_uuid)
-                    # ----------------
+                        if not self.check_for_dup2(msg_uuid, self.beacon_ack_list):
+                            self.beacon_ack_list.append(msg_uuid)
+                        # ----------------
 
-                    if network_plaintext not in self.network_plaintexts:
-                        self.network_plaintexts.append(network_plaintext)
                         if self.config.hw_rev <= 2:
-                            self.process_group_messages()
+                            if network_plaintext not in self.network_plaintexts:
+                                self.network_plaintexts.append(network_plaintext)
+                                self.process_group_messages()
 
                         self.ble_handset_msg_queue.put_nowait([packet_author,
                                                                node_uuid,
@@ -414,10 +418,10 @@ class Message(Thread):
                                                                msg_type,
                                                                rf_rssi,
                                                                rf_snr])
-                        if self.config.test_mode:
-                            self.test_message_file.write("+_+_+_+_+_+_+_+_+\n")
-                            self.test_message_file.write(packet_author + " / [" + node_uuid + "]\n")
-                            self.test_message_file.write(group_msg + "\n")
+                        #if self.config.test_mode:
+                            #self.test_message_file.write("+_+_+_+_+_+_+_+_+\n")
+                            #self.test_message_file.write(packet_author + " / [" + node_uuid + "]\n")
+                            #self.test_message_file.write(group_msg + "\n")
 
                         if msg_type == self.MSG_TYPE_ECHO_REQ:
                             self.test_echo_cnt += 1
@@ -442,11 +446,12 @@ class Message(Thread):
                         self.beacon_ack_list = []
                                                    
                     if beacon_hash == self.beacon_hash:
-                        for (msg_uuid, msg) in self.repeat_msg_list:
-                            if node_uuid in self.disregard_list:
-                                self.disregard_list[node_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[node_uuid] else None
-                            else:
-                                self.disregard_list[node_uuid] = [msg_uuid]
+                        if node_uuid == "" or self.peer_uuid == "":
+                            pass
+                            #self.log.error("!!!!!!!!!!! empty uuid nodeuuid: " + node_uuid + " peeruuid: " + self.peer_uuid)
+                        else:
+                            for (msg_uuid, msg) in self.repeat_msg_list:
+                                self.update_disregard(msg_uuid, node_uuid, self.peer_uuid)
 
                         if self.private_mode != self.PRIVATE_MODE_DISABLED:
                             self.private_mode_disabled_req = True
@@ -468,24 +473,11 @@ class Message(Thread):
 
                 elif msg_type == self.MSG_TYPE_ACK:
                     msg_uuids = re.findall('........', group_cleartext[16:])
-                    for msg_uuid in msg_uuids:
-                        # ---------------
-                        #  Prevent sending messages to nodes that already have them
-                        # ---------------
-                        if node_uuid in self.disregard_list:
-                            self.disregard_list[node_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[node_uuid] else None
-                        else:
-                            self.disregard_list[node_uuid] = [msg_uuid]
-
-                        if self.peer_uuid in self.disregard_list:
-                            self.disregard_list[self.peer_uuid].append(msg_uuid) if msg_uuid not in self.disregard_list[self.peer_uuid] else None
-                        else:
-                            self.disregard_list[self.peer_uuid] = [msg_uuid]
-                        # ----------------
-                    # self.radio_outbound_queue.queue.clear()
- 
-                    # if beacon_hash == self.beacon_hash:
-                    #    self.private_mode_disabled_req = True
+                    if node_uuid == "" or self.peer_uuid == "":
+                        self.log.error("************ empty uuid nodeuuid: " + node_uuid + " peeruuid: " + self.peer_uuid)
+                    else:   
+                        for msg_uuid in msg_uuids:
+                            self.update_disregard(msg_uuid, node_uuid, self.peer_uuid)
 
                     self.log.debug("Recv ACK q:%s Peer:%s RepeatSt: " %
                                    (self.signal_quality(rf_rssi, rf_snr), node_uuid))
@@ -531,7 +523,7 @@ class Message(Thread):
                     else:
                         # This is for someone else, we will not engage peer_uuid this round
                         # Unless there is a opportunity to "tag along" in a listen only mode (3 node network, TODO examples)
-                        self.log.debug("Recv Engage Req: Ignored.")
+                        self.log.debug("Recv Engage Req: Ignored. UUID: " + node_uuid + " not our UUID: " + self.config.node_uuid)
                         self.beacon_type = self.MSG_TYPE_BEACON
                         self.engage_ignore_list.append(node_uuid)
                         self.engage_ignore_list.append(peer_uuid)
@@ -539,7 +531,7 @@ class Message(Thread):
                     
                     pass
                 else:
-                    self.log.warn("Unknown Msg Type: " + group_cleartext + " MsgType: " + msg_type)
+                    self.log.warn("Unknown Msg Type: " + group_cleartext + " MsgType: " + str(msg_type))
             else:
                 self.log.debug("Packet Dropped due to missing MAC")
 

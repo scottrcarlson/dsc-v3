@@ -121,7 +121,6 @@ if __name__ == "__main__":
     """
     heartbeat_time = time.time()
 
-    log.debug("HELLO Have we returned control?")
     for sig in (signal.SIGABRT, signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, signal_handler)
 
@@ -162,7 +161,7 @@ if __name__ == "__main__":
                     heartbeat_time = time.time()
         except Exception as e:
                 log.error(str(e))
-        sleep(1)
+        sleep(5)
     iodef.PWM_LED_RED.stop()
     iodef.PWM_LED_GREEN.stop()
     iodef.PWM_LED_BLUE.stop()

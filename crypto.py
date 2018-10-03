@@ -14,6 +14,7 @@ pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 unpad = lambda s : s[:-ord(s[len(s)-1:])]
 
 # logging.basicConfig(level=logging.DEBUG,format='%(name)-12s| %(levelname)-8s| %(message)s')
+
 class Crypto(object):
 	def __init__(self):
 		self.log = logging.getLogger()
@@ -25,14 +26,13 @@ class Crypto(object):
 		else:
 			ptbytestr = pt
 
-		ptb64 = base64.encodestring(ptbytestr)
 		key = pad(key)
-		ptb64 = pad(ptb64)
+		ptbytestr = pad(ptbytestr)
 
 		iv = self.generateIV()
 		cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
 		encryptor = cipher.encryptor()
-		ct = encryptor.update(ptb64) + encryptor.finalize()
+		ct = encryptor.update(ptbytestr) + encryptor.finalize()
 
 		return iv + ct
 
@@ -42,10 +42,9 @@ class Crypto(object):
 		ct = ct[16:]
 		cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
 		decryptor = cipher.decryptor()
-		ptb64 = decryptor.update(ct) + decryptor.finalize()
-		ptb64 = unpad(ptb64)
+		pt = decryptor.update(ct) + decryptor.finalize()
+		pt = unpad(pt)
 
-		pt = base64.decodestring(ptb64)
 		return pt
 
 	def generateIV(self):

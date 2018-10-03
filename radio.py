@@ -197,9 +197,8 @@ class Radio(Thread):
                                 if self.message.private_mode != self.message.PRIVATE_MODE_DISABLED:
                                     packet_cnt = self.message.fill_outbound_queue()
                                     bs_kb = round((packet_cnt * 224) / 1000.0, 2)
-                                    self.log.debug(str(packet_cnt) + " packets left to transmit [" + str(bs_kb) + " kB]")
-                                    for node in self.message.disregard_list:
-                                        self.log.debug(node + ": " + str(len(self.message.disregard_list[node])) + " acknowledged")
+                                    self.log.debug(str(packet_cnt) + " packets to transmit [" + str(bs_kb) + " kB] RepeatStack: " + str(len(self.message.repeat_msg_list)))
+  
                                 self.message.generate_beacon()
                                 # self.log.debug("[TX mode] Transmitting")
                             

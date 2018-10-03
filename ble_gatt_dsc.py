@@ -339,6 +339,7 @@ class DSC_Msg_Inbound_Characteristic(gatt.Characteristic):
         if self.notifying:
             return
         else:
+            pass
             self.notify_timer = GObject.timeout_add(1000, self.notify_handset)
         self.notifying = True
 
