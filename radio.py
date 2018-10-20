@@ -264,8 +264,6 @@ class Radio(Thread):
         sync_word = self.mc._send_command(OPCODES['SYNC_WORD_GET'])[0]
         return freq, bandwidth, spread_factor, coding_rate, tx_power, sync_word
 
-
-
     def process_inbound_msg(self):
         global total_recv
         global total_exceptions

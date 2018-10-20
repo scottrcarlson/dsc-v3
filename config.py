@@ -125,7 +125,6 @@ class Config(object):
         except Exception as e:
             self.log.error(str(e))
 
-
     def load_testconfig(self):
         try:
             self.cfg.read(CONFIG_PATH + '/' + TEST_FILE)
@@ -146,7 +145,6 @@ class Config(object):
             self.test_mode = True
         except Exception as e:
             self.log.error(str(e))
-
 
     def load_test_params(self):
         if os.path.isfile(CONFIG_PATH + '/' + TEST_FILE):

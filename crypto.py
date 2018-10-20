@@ -15,6 +15,7 @@ unpad = lambda s : s[:-ord(s[len(s)-1:])]
 
 # logging.basicConfig(level=logging.DEBUG,format='%(name)-12s| %(levelname)-8s| %(message)s')
 
+
 class Crypto(object):
 	def __init__(self):
 		self.log = logging.getLogger()

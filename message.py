@@ -129,7 +129,7 @@ class Message(Thread):
                         self.radio_outbound_queue.put_nowait(msg)
         return self.radio_outbound_queue.qsize()
 
-    def update_disregard(self,msg_uuid, node_uuid, peer_uuid):
+    def update_disregard(self, msg_uuid, node_uuid, peer_uuid):
         # ---------------
         # Prevent sending messages to nodes that already have them
         # ---------------
@@ -279,9 +279,9 @@ class Message(Thread):
             #     Total 24 bytes for a beacon packet
             ##################
             self.config.e_ch_seed = str(uuid.uuid4())[:2]
-            self.config.e_tx_power = 20
-            self.config.e_bandwidth = 3
-            self.config.e_spread_factor = 8
+            self.config.e_tx_power = 26
+            self.config.e_bandwidth = 2
+            self.config.e_spread_factor = 10
             self.config.e_coding_rate = 2
             self.config.e_tx_time = 3
             self.config.e_tx_deadband = 2
@@ -350,7 +350,6 @@ class Message(Thread):
             self.radio_beacon_queue.put_nowait(ota_cipher)
 
         return True  # TODO Lets capture crypto error and report back false
-
 
     def process_inbound_packet(self, ota_cipher, rf_rssi, rf_snr):
         # self.log.debug("Processing Inbound Packet")
@@ -560,7 +559,6 @@ class Message(Thread):
             # self.log.debug("GroupText Len: " +  str(len(self.group_cleartexts)))
         return True
 
-
     def calculate_bitrate(self, sf, bw, cr):
         if cr == 1:
             cr = 4.0 / 5.0
@@ -596,6 +594,7 @@ class Message(Thread):
         # SF10 RSSI > -132 / SNR > -15
         # SF11 RSSI > -134 / SNR > -17.5
         # SF12 RSSI > -137 / SNR > -20
+
         # Look at these ratings, are they reasonable?
         # print str(rssi) + " " +str(snr)
         sf = self.config.spread_factor
