@@ -6,7 +6,7 @@ import logging
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from os import urandom
-import base64
+import pysodium
 
 BS = 16
 
@@ -41,14 +41,37 @@ class Crypto(object):
 		key = pad(key)
 		iv = ct[:16]
 		ct = ct[16:]
-		cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-		decryptor = cipher.decryptor()
-		pt = decryptor.update(ct) + decryptor.finalize()
-		pt = unpad(pt)
+		try:
+			cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+			decryptor = cipher.decryptor()
+			pt = decryptor.update(ct) + decryptor.finalize()
+			pt = unpad(pt)
+		except Exception:
+			self.log.error("Failed to decrypt packet.")
+			return ""
 
 		return pt
 
 	def generateIV(self):
 		random_bytes = urandom(16)
 		return random_bytes
+
+	def encrypt_aead(self, key, pt):
+		nonce = pysodium.randombytes(8)
+		ad = ""
+		cipher = pysodium.crypto_aead_chacha20poly1305_encrypt(pt, ad, nonce, key)
+		#print "Chacha20 Poly1305: Plaintext Len: " + str(len(pt)) + " Cipher Len: " + str(len(cipher))
+		return nonce + cipher
+
+	def decrypt_aead(self, key, ct):
+		nonce = ct[:8]
+		cipher = ct[8:]
+		ad = ""
+		try:
+			plaintext = pysodium.crypto_aead_chacha20poly1305_decrypt(cipher, ad, nonce, key)
+		except Exception:
+			self.log.error("Failed to decrypt packet.")
+			return ""
+					
+		return plaintext
 
